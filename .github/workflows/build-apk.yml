@@ -73,8 +73,8 @@ jobs:
           ./gradlew :app:assembleDebug --no-daemon --stacktrace \
             -Pdsh.engineOut="$PWD/toolchains/out/engine" \
             -Pdsh.nativeOut="$PWD/../toolchains/out/jniLibs" \
-            -Pdsh.thirdPartyOut="$PWD/toolchains/out/third-party" \
-            -Pdsh.versionSuffix="-chiheiheideya~$BUILD_NO" \
+            -Pdsh.thirdPartyOut="$PWD/toolchains/out/third-party" \ \
+            -Pdsh.versionCode=$(( 31 + BUILD_NO )) \
             -Pdsh.debug.storeFile="$HOME/signing/dsh.jks" \
             -Pdsh.debug.storePassword=chiheiheideya \
             -Pdsh.debug.keyAlias=chiheiheideya \
@@ -91,10 +91,19 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      - name: Keep only the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 100 --json tagName -q '.[].tagName' | while read t; do
+            [ -z "$t" ] && continue
+            gh release delete "$t" -y --cleanup-tag || true
+          done
+
       - name: Publish release (public APK download)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: chiheiheideya-${{ env.BUILD_NO }}
-          name: DSH chiheiheideya ${{ env.BUILD_NO }}
+          tag_name: v0.4.0
+          name: DSH 0.4.0
           body: "chiheiheideya 自动构建（debug keystore）。"
           files: app/build/outputs/apk/debug/app-debug.apk
