@@ -229,7 +229,7 @@ function storeAttachments(attachmentsDir, referenced, objectsDir) {
  * @param options.writeLog 是否把修好的日志写进 sessions/（默认 false：只回传 DB 行，保证不出现打不开的会话）
  * @param options.dryRun 只体检不落盘
  */
-export function importSessions({ dir, home, cwd, writeLog = false, dryRun = false }) {
+export function importSessions({ dir, home, cwd, writeLog = false, dryRun = false, only = null }) {
   if (typeof dir !== 'string' || dir === '') throw new TypeError(`${METHOD} requires a dir string`)
   if (!fs.existsSync(dir)) throw new Error(`${METHOD}: no such directory: ${dir}`)
   const projectKey = cwd.replace(/[^A-Za-z0-9]/g, '-').replace(/^-+|-+$/g, '') // 与 App/引擎的项目目录命名一致
@@ -237,7 +237,7 @@ export function importSessions({ dir, home, cwd, writeLog = false, dryRun = fals
   const rowsDir = path.join(home, 'android', 'import-rows')
   const objectsDir = path.join(home, 'attachments', 'v1', 'objects')
   const results = []
-  for (const name of fs.readdirSync(dir)) {
+  for (const name of only ? [only] : fs.readdirSync(dir)) {
     const sessionDir = path.join(dir, name)
     let stat
     try { stat = fs.statSync(sessionDir) } catch { continue }
@@ -286,7 +286,7 @@ export function setupSessionImport(ctx, { home, cwd }) {
   methods.set(METHOD, async (params = {}) => {
     const dir = typeof params.dir === 'string' && params.dir !== '' ? params.dir : path.join(home, 'android', 'import-sessions')
     if (!fs.existsSync(dir)) return { dir, sessions: [], missing: true }
-    const out = importSessions({ dir, home, cwd, writeLog: params.writeLog === true, dryRun: params.dryRun === true })
+    const out = importSessions({ dir, home, cwd, writeLog: params.writeLog === true, dryRun: params.dryRun === true, only: typeof params.only === 'string' && params.only !== '' ? params.only : null })
     if (!out.dryRun) {
       const resultFile = path.join(home, 'android', RESULT_FILE)
       fs.mkdirSync(path.dirname(resultFile), { recursive: true })

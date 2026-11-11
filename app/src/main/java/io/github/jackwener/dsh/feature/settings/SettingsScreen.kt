@@ -523,8 +523,10 @@ private fun AboutSection(vm: SettingsViewModel) {
         // 全部会话：按会话分目录流式导出（不再整库 JSON，避免 OOM 闪退）
         SettingsRow("导出全部会话（文件夹）", "写到「下载/DSH-Android/sessions-export/」，每个会话一个子目录，可在另一版本导入", divider = true,
             trailing = { DButton("导出", { exportState = "正在导出会话…"; vm.exportSessions { p ->
-                exportState = "已导出到 " + p
-                android.widget.Toast.makeText(context, "已导出到 " + p, android.widget.Toast.LENGTH_LONG).show() } }, variant = BtnVariant.Outline, size = BtnSize.Sm) })
+                // 失败就是失败：不再拼「已导出到 导出失败：…」
+                val ok = !p.startsWith("导出失败")
+                exportState = if (ok) "已导出到 " + p else p
+                android.widget.Toast.makeText(context, exportState, android.widget.Toast.LENGTH_LONG).show() } }, variant = BtnVariant.Outline, size = BtnSize.Sm) })
         SettingsRow("导入全部会话（文件夹）", "读取上面的目录：转换后写入会话库（结构自动修复）", divider = true,
             trailing = { DButton("导入", { importState = "正在导入会话…"; vm.importSessions { n ->
                 val msg = when {
@@ -573,6 +575,11 @@ private fun AboutSection(vm: SettingsViewModel) {
         }
         SettingsRow("导入数据（文件夹）", "选「下载/数据导出」整包，或按会话分目录的导出；会话导入完即可看到，不用重启", divider = true,
             trailing = { DButton("选择文件夹", { importPicker.launch(null) }, variant = BtnVariant.Outline, size = BtnSize.Sm) })
+        val importProgress by vm.importProgress.collectAsStateWithLifecycle()
+        importProgress?.let { p ->
+            Text("正在导入 " + p.done + "/" + p.total + "：" + p.name, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+                style = DshType.xxs12, color = c.labelSecondary)
+        }
         importState?.let { msg ->
             Text(msg, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp), style = DshType.xxs12, color = c.labelTertiary)
         }

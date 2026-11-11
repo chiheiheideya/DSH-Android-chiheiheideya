@@ -173,19 +173,51 @@ class SessionStore @Inject constructor(
      * $DSH_HOME/android/import-sessions，这里让引擎侧转换（结构修复 + seq 重编号）并落到会话库。
      * 默认不写引擎日志（writeLog=false）：旧导出的信封字段与部分事件已缺失，写进 sessions/ 会打不开。
      */
+    /** 会话导入进度（设置页显示「正在导入 2/3：会话名」）。 */
+    data class ImportProgress(val done: Int, val total: Int, val name: String)
+
+    val importProgress = MutableStateFlow<ImportProgress?>(null)
+
     suspend fun importSessionsFromStaging() = withContext(Dispatchers.IO) {
         val dir = File(context.filesDir, "dsh-home/android/import-sessions")
         if (!dir.isDirectory) return@withContext
-        val sdk = waitForSdk() ?: return@withContext
-        val result = runCatching {
-            sdk.request("android/session/import", buildJsonObject {
-                put("dir", dir.absolutePath)
-                put("writeLog", false)
-            })
-        }.getOrNull() ?: return@withContext
-        // 引擎只回会话元数据；事件行落在 <home>/android/import-rows/<id>.jsonl，逐行读、分批插入
-        // （一次性把几万条事件塞进一个 JSON 会 OOM —— 旧的「导入会话」就是这么闪退的）。
-        val sessions = (result as? JsonObject)?.get("sessions") as? JsonArray ?: return@withContext
+        val sessions = dir.listFiles().orEmpty()
+            .filter { it.isDirectory && File(it, "session.json").isFile && File(it, "events.jsonl").isFile }
+            .sortedBy { it.name }
+        if (sessions.isEmpty()) return@withContext
+        val errorFile = File(context.filesDir, "dsh-home/android/import-error.txt")
+        try {
+            // engine.sdk() 会启动并等待引擎就绪；以前用 sdkIfReady() 轮询，引擎慢一点就直接放弃，
+            // 表现为"导入没反应"。
+            val sdk = engine.sdk()
+            var done = 0
+            for (sessionDir in sessions) {
+                importProgress.value = ImportProgress(done, sessions.size, sessionDir.name)
+                val result = sdk.request("android/session/import", buildJsonObject {
+                    put("dir", dir.absolutePath)
+                    put("only", sessionDir.name) // 一次一个会话：请求短、能报进度
+                    put("writeLog", false)
+                })
+                writeImportedSession(result as? JsonObject)
+                done++
+                importProgress.value = ImportProgress(done, sessions.size, sessionDir.name)
+            }
+            // 处理过的目录挪走，避免每次启动重复导入
+            dir.renameTo(File(dir.parentFile, "import-sessions-done-" + System.currentTimeMillis()))
+            runCatching { errorFile.delete() }
+        } catch (e: Throwable) {
+            // 把原因落盘：设置页提示"导入失败"，这里留可读的细节
+            runCatching { errorFile.writeText((e.message ?: e.javaClass.name) + "\n") }
+            android.util.Log.w(TAG, "import sessions from staging failed", e)
+            throw e
+        } finally {
+            importProgress.value = null
+        }
+    }
+
+    /** 引擎返回的元数据 + import-rows/<id>.jsonl 的事件行 → 会话库（逐行读、分批 500 条）。 */
+    private suspend fun writeImportedSession(result: JsonObject?) {
+        val sessions = result?.get("sessions") as? JsonArray ?: return
         for (element in sessions) {
             val o = element as? JsonObject ?: continue
             val id = o["id"]?.jsonPrimitive?.contentOrNull ?: continue
@@ -222,8 +254,6 @@ class SessionStore @Inject constructor(
                 modelEffort = o["modelEffort"]?.jsonPrimitive?.contentOrNull,
             ))
         }
-        // 处理过的目录挪走，避免每次启动重复导入
-        dir.renameTo(File(dir.parentFile, "import-sessions-done-" + System.currentTimeMillis()))
     }
 
     /**

@@ -38,7 +38,7 @@ data class UpdateManifest(
 
     companion object {
         const val FORMAT = 1L
-        private const val REPO = "jackwener/DSH-Android"
+        private const val REPO = "chiheiheideya/DSH-Android-chiheiheideya"
 
         /**
          * Where `update.json` is fetched from, in order (first valid one wins, the next starts a few

@@ -21,16 +21,17 @@ android {
 
     defaultConfig {
         // 分发标识：默认带 chiheiheideya 后缀（与官方 .dev 包可并存安装）。
-        // 覆盖：-Pdsh.idSuffix=.other；去掉后缀传空串 -Pdsh.idSuffix=
+        // 覆盖：-Pdsh.idSuffix=.other；想去掉后缀就传空串 -Pdsh.idSuffix=
         applicationId = "com.dsh" + (project.findProperty("dsh.idSuffix")?.toString() ?: ".chiheiheideya")
         minSdk = 29
         targetSdk = 36
-        versionCode = 31
-        // 版本后缀：默认 chiheiheideya 标识（CI 传 -Pdsh.versionSuffix 时覆盖）
-        versionName = "0.4.0" + (project.findProperty("dsh.versionSuffix")?.toString() ?: "-chiheiheideya~")
+        versionCode = (project.findProperty("dsh.versionCode")?.toString()?.toIntOrNull() ?: 31)
+        // 版本后缀：默认 chiheiheideya 标识（CI 传 -Pdsh.versionSuffix="-dev$BUILD_NO" 时可覆盖）
+        // 版本号跟随官方 DSH（0.4.0）；更新靠 versionCode 递增
+        versionName = "0.4.0"
         ndk { abiFilters += "arm64-v8a" }
         // Bundled official Shizuku APK (in-app install/update); pinned in tools/fetch-shizuku.sh.
-        // 让 App 与引擎知道这是谁的构建（关于页 / 系统提示词同一串）
+        // 让 App 与引擎知道这是谁的构建（关于页 / 系统提示词用同一串）
         buildConfigField("String", "BUILD_TAG", "\"chiheiheideya~\"")
         buildConfigField("String", "SHIZUKU_VERSION", "\"${shizukuPin("VERSION")}\"")
         buildConfigField("long", "SHIZUKU_VERSION_CODE", "${shizukuPin("VERSION_CODE")}L")
