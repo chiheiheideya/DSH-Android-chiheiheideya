@@ -160,12 +160,19 @@ private fun ConversationPane(vm: HomeViewModel, onMenu: () -> Unit, onSettings: 
         val bannerCtx = androidx.compose.ui.platform.LocalContext.current
         val promptPrefs = remember(bannerCtx) { bannerCtx.getSharedPreferences("permission_prompts", android.content.Context.MODE_PRIVATE) }
         var dhzPrompt by remember {
-            mutableStateOf(!io.github.jackwener.dsh.core.platform.DhizukuBridge.isGranted() && !promptPrefs.getBoolean("dhizuku_declined", false))
+            mutableStateOf(!io.github.jackwener.dsh.core.platform.DhizukuBridge.isGranted() &&
+                !promptPrefs.getBoolean("dhizuku_declined", false) && !promptPrefs.getBoolean("prompt_shown_once", false))
         }
         var dhzTip by remember { mutableStateOf(false) }
         val (shzAccess, shzState) = io.github.jackwener.dsh.feature.settings.rememberShellState()
-        var shzPrompt by remember { mutableStateOf(!shzState.ready && !promptPrefs.getBoolean("shizuku_declined", false)) }
+        var shzPrompt by remember {
+            mutableStateOf(!shzState.ready && !promptPrefs.getBoolean("shizuku_declined", false) && !promptPrefs.getBoolean("prompt_shown_once", false))
+        }
         var shzTip by remember { mutableStateOf(false) }
+        // 权限横幅：展示过一次就记住，之后默认不再自动弹（设置 → 手机权限 里仍可授权）
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            if (dhzPrompt || shzPrompt) promptPrefs.edit().putBoolean("prompt_shown_once", true).apply()
+        }
         androidx.compose.runtime.LaunchedEffect(dhzTip) { if (dhzTip) { kotlinx.coroutines.delay(3000); dhzPrompt = false } }
         androidx.compose.runtime.LaunchedEffect(shzTip) { if (shzTip) { kotlinx.coroutines.delay(3000); shzPrompt = false } }
         androidx.compose.runtime.LaunchedEffect(shzState) { if (shzState.ready) shzPrompt = false }
