@@ -230,6 +230,7 @@ class SessionStore @Inject constructor(
             val createdAt = o["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
             val rowsFile = File(context.filesDir, "dsh-home/android/import-rows/$id.jsonl")
             var lastTime = 0L
+            val chat = StringBuilder()
             if (rowsFile.isFile) {
                 val reader = rowsFile.bufferedReader()
                 try {
@@ -243,12 +244,26 @@ class SessionStore @Inject constructor(
                         val time = r["time"]?.jsonPrimitive?.longOrNull ?: 0L
                         if (time > lastTime) lastTime = time
                         batch.add(EventEntity(id, seq, type, r["json"]?.jsonPrimitive?.contentOrNull ?: "{}", time))
+                        // 摘要只留对话文本（用户/助手），截断到 ~6000 字
+                        if (chat.length < 6000 && (type == "user/message" || type == "assistant/message")) {
+                            val body = runCatching { RpcJson.parseToJsonElement(r["json"]?.jsonPrimitive?.contentOrNull ?: "{}").jsonObject }.getOrNull()
+                            val c = body?.get(if (type == "user/message") "content" else "message")
+                            val txt = runCatching {
+                                val arr = if (type == "user/message") c as? JsonArray else ((c as? JsonObject)?.get("content") as? JsonArray)
+                                arr?.joinToString("") { b -> ((b as? JsonObject)?.get("text")?.jsonPrimitive?.contentOrNull ?: "") } ?: ""
+                            }.getOrDefault("")
+                            if (txt.isNotBlank()) chat.append(if (type == "user/message") "用户：" else "助手：").append(txt.take(600)).append("\n")
+                        }
                         if (batch.size >= 500) { dao.insertEvents(batch); batch = ArrayList(512) }
                     }
                     if (batch.isNotEmpty()) dao.insertEvents(batch)
                 } finally { reader.close() }
             }
             lockImportedTitle(id, title)
+            if (chat.isNotBlank()) runCatching {
+                val dir = File(context.filesDir, "dsh-home/android/import-summaries").apply { mkdirs() }
+                File(dir, "$id.txt").writeText(chat.toString())
+            }
             dao.upsert(SessionEntity(
                 id = id, title = title, createdAt = createdAt,
                 updatedAt = if (lastTime > 0) lastTime else System.currentTimeMillis(),
@@ -441,7 +456,26 @@ class SessionStore @Inject constructor(
      * engine problems: a failure becomes an `app/error` record in the log (shown as a failed
      * turn with a retry affordance) and the session goes back to idle.
      */
-    suspend fun prompt(sessionId: String, text: String, ruleId: Long? = null) {
+    /**
+     * 导入会话的"旧上下文注入"：导入时写了 `android/import-summaries/<id>.txt`，
+     * 这里在**第一条消息**前拼上摘要（然后删掉，避免每轮都占 token）。
+     * 这是不依赖引擎日志校验的续聊方案：模型直接读到旧对话，不用自己再翻记录。
+     */
+    private suspend fun withImportedContext(sessionId: String, text: String): String = withContext(Dispatchers.IO) {
+        if (text.startsWith(APP_PROMPT_PREFIX)) return@withContext text
+        runCatching {
+            val f = File(context.filesDir, "dsh-home/android/import-summaries/$sessionId.txt")
+            if (!f.isFile) return@withContext text
+            val summary = f.readText()
+            f.delete()
+            if (summary.isBlank()) text
+            else "【以下是这个会话在旧版本里的历史对话，请据此理解上下文后回答，不要说自己看不到历史】\n" + summary + "\n\n【用户现在说】\n" + text
+        }.getOrDefault(text)
+    }
+
+    suspend fun prompt(sessionId: String, rawText: String, ruleId: Long? = null) {
+        // 从旧版本导入的会话：第一次发消息时把历史摘要一并带上，模型不用自己重读一遍
+        val text = withImportedContext(sessionId, rawText)
         val now = System.currentTimeMillis()
         val existing = dao.get(sessionId)
         val live = flowOf(sessionId).value
@@ -858,9 +892,14 @@ class SessionStore @Inject constructor(
      * 但 Android 11+ 下写入 Download 可能 EACCES（目录被别的应用/旧构建占用），
      * 所以先试写一次；不行就退回 App 专属目录 `/sdcard/Android/data/com.dsh.chiheiheideya/files/`（必定可写）。
      */
-    private fun sessionsExportDir(): File =
-        // 直接写 App 专属目录：不依赖 Download 的存储权限，必定可写（路径会在提示里显示）
-        File(context.getExternalFilesDir(null) ?: context.filesDir, "sessions-export").apply { mkdirs() }
+    private fun sessionsExportDir(): File {
+        // 用户要能在文件管理器里拿到导出：写 Download 下的本 App 专属目录。
+        // 旧目录若是别的构建创建的会 EACCES，所以先删掉、由本 App 重新创建。
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DSH-导出").resolve("sessions-export")
+        if (dir.exists()) runCatching { dir.deleteRecursively() }
+        dir.mkdirs()
+        return dir
+    }
 
     /** 导入/导出暂存目录（App 私有）：引擎侧转换后由 [importSessionsFromStaging] 落库。 */
     private fun sessionImportStaging(): File = File(context.filesDir, "dsh-home/android/import-sessions").apply { mkdirs() }
