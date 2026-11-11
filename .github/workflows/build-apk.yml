@@ -73,7 +73,7 @@ jobs:
           ./gradlew :app:assembleDebug --no-daemon --stacktrace \
             -Pdsh.engineOut="$PWD/toolchains/out/engine" \
             -Pdsh.nativeOut="$PWD/../toolchains/out/jniLibs" \
-            -Pdsh.thirdPartyOut="$PWD/toolchains/out/third-party" \ \
+            -Pdsh.thirdPartyOut="$PWD/toolchains/out/third-party" \
             -Pdsh.versionCode=$(( 31 + BUILD_NO )) \
             -Pdsh.debug.storeFile="$HOME/signing/dsh.jks" \
             -Pdsh.debug.storePassword=chiheiheideya \
