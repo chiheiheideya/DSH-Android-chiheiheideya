@@ -294,7 +294,12 @@ object Projector {
                         } else if (prev != null && turns.lastOrNull() === prev) resumeInto = prev
                         continue
                     }
-                    val msg = UserMsg(e.seq, e.time, textOf(content), countOf(content, "image"), countOf(content, "file"))
+                    // 导入会话的"旧上下文"是拼在消息里发给模型的，界面上只显示用户真正打的那句话
+                    val raw = textOf(content)
+                    val marker = "【用户现在说】"
+                    val shown = if (raw.startsWith("【以下是这个会话在旧版本里的历史对话") && raw.contains(marker))
+                        raw.substringAfter(marker).trim() else raw
+                    val msg = UserMsg(e.seq, e.time, shown, countOf(content, "image"), countOf(content, "file"))
                     val t = open()
                     // A turn's own prompt: nothing of the model's yet (a compaction or a notice may precede it).
                     if (t != null && t.user == null && t.blocks.all { it is Block.Compaction || it is Block.Notice }) t.user = msg

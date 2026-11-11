@@ -185,7 +185,7 @@ fun UpdateSettingsRows(updater: AppUpdater, autoCheck: Boolean, onAutoCheck: (Bo
                 is CheckResult.Found -> stringResource(R.string.upd_res_found, r.versionName)
                 is CheckResult.Unsupported -> stringResource(R.string.upd_res_unsupported, r.versionName, r.minSdk)
                 is CheckResult.Skipped -> stringResource(R.string.upd_res_skipped, r.versionName)
-                is CheckResult.Failed -> stringResource(R.string.upd_res_failed, r.detail.take(160))
+                is CheckResult.Failed -> stringResource(R.string.upd_res_failed, r.detail.take(600))
             })
         }
     }
