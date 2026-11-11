@@ -464,8 +464,8 @@ class AppUpdater @Inject constructor(
         private const val STAGGER_MS = 3_000L
         private const val CHECK_DEADLINE_MS = 60_000L
         private const val RESUME_WINDOW_MS = 10 * 60_000L
-        /** Our own build chain: every CI build publishes a `dev-N` release with the APK here. */
-        private const val RELEASE_REPO = "chiheiheideya/dsh-build"
+        /** 发布仓库：新公开仓库，CI 每次发布一个 `v0.4.0` release（旧 dsh-build 的版本已删除 → 那里的 /releases/latest 会 404）。 */
+        private const val RELEASE_REPO = "chiheiheideya/DSH-Android-chiheiheideya"
         private const val RELEASES_API = "https://api.github.com/repos/" + RELEASE_REPO + "/releases/latest"
         /** Free space kept beyond the APK (the session copies it once more while installing). */
         private const val SPACE_MARGIN = 50_000_000L
