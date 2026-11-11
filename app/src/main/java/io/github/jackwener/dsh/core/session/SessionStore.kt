@@ -1101,6 +1101,13 @@ class SessionStore @Inject constructor(
                     if (locked == null) rename(sessionId, t) else mutate(sessionId) { it.copy(title = locked) }
                 }
                 if (type == "assistant/message" || type == "assistant/attempt") recordUsage(data)
+                // 兜底：turn 已经结束但没收到 session.status(idle)（代次过滤/丢包/网络等待卡住）时，
+                // 会话会一直显示"运行中"，只能手动点停止。按 turn/end 复位。
+                if (type == "turn/end" && flowOf(sessionId).value.running) {
+                    dao.setRunning(sessionId, false)
+                    mutate(sessionId) { it.copy(running = false, runStartedAt = null, waitingForNetwork = false, startingEngine = false) }
+                    onTurnFinished(sessionId)
+                }
             }
             "session.status" -> {
                 // A torn-down generation's status (its tail drained after the loss) is not this run's.
