@@ -201,6 +201,61 @@ export function frameLog(lines) {
   return Buffer.concat([first, body])
 }
 
+/** 从 repaired 行里抽「用户/助手」文本（工具调用、思考块不进记忆，只保对话）。 */
+function chatText(rows) {
+  const out = [];
+  for (const r of rows) {
+    if (typeof r.seq !== 'number' || r.seq < 0) continue;
+    let d
+    try { d = JSON.parse(r.json) } catch { continue }
+    const pick = (c) => Array.isArray(c) ? c.filter(b => b && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join('').trim() : ''
+    if (r.type === 'user/message') {
+      const t = pick(d.content)
+      if (t) out.push({ role: 'user', text: t })
+    } else if (r.type === 'assistant/message') {
+      const t = pick(d.message?.content)
+      if (t) out.push({ role: 'assistant', text: t })
+    }
+  }
+  return out
+}
+
+/**
+ * 把历史对话重建为**当前 harness 一定能读的** v4 日志（只含 user/assistant 文本消息 + turn/step 结构）。
+ * 旧实例的事件带插件信封、缺 turn/end、tool/result 残片，原样写进 sessions/ 会被 fail-closed 校验拒绝；
+ * 重建后引擎能 resume，模型就能带着上下文继续（代价：工具调用与思考块不进记忆）。
+ */
+export function buildResumeLog(rows, { id, createdAt, cwd }) {
+  const msgs = chatText(rows)
+  const events = []
+  let seq = 0
+  let turn = 0
+  let open = false
+  const push = (type, data, extra = {}) => events.push({ type, seq: seq++, time: Date.now(), data, ...extra })
+  const closeTurn = () => { if (!open) return; push('step/end', { turn, step: 1 }); push('turn/end', { turn, reason: { kind: 'completed' } }); open = false }
+  for (const m of msgs) {
+    if (m.role === 'user') {
+      closeTurn()
+      turn += 1
+      push('turn/start', { turn })
+      push('step/start', { turn, step: 1 })
+      open = true
+      push('user/message', { content: [{ type: 'text', text: m.text }], source: { kind: 'user' }, role: 'user', id: crypto.randomUUID() }, { surfaceOp: 'append' })
+    } else {
+      if (!open) {
+        turn += 1
+        push('turn/start', { turn })
+        push('step/start', { turn, step: 1 })
+        open = true
+      }
+      push('assistant/message', { turn, step: 1, message: { id: crypto.randomUUID(), role: 'assistant', content: [{ type: 'text', text: m.text }] } }, { surfaceOp: 'append' })
+    }
+  }
+  closeTurn()
+  const header = { type: 'session', version: 4, id, createdAt, cwd, isSeeded: false, delegationDepth: 0 }
+  return [header, ...events]
+}
+
 /** 把内容 sha256 的对象放进附件对象库（只放被事件真正引用的）。 */
 function storeAttachments(attachmentsDir, referenced, objectsDir) {
   let stored = 0
@@ -272,7 +327,8 @@ export function importSessions({ dir, home, cwd, writeLog = false, dryRun = fals
       const target = path.join(sessionsDir, id)
       fs.mkdirSync(target, { recursive: true })
       logPath = path.join(target, 'session.v4.jsonl.zstd')
-      fs.writeFileSync(logPath, frameLog(repaired.lines))
+      // 重建成引擎一定能 resume 的日志：模型才会带着旧上下文继续（否则只是"看得见"）
+      fs.writeFileSync(logPath, frameLog(buildResumeLog(repaired.rows, { id, createdAt: session.createdAt, cwd })))
       fs.writeFileSync(path.join(target, 'session.lock'), '')
     }
     results.push({ ...session, rowsCount: repaired.rows.length, rowsFile, stats: repaired.stats, attachments, logPath, writeLog })
