@@ -243,6 +243,7 @@ class SessionStore @Inject constructor(
                     if (batch.isNotEmpty()) dao.insertEvents(batch)
                 } finally { reader.close() }
             }
+            lockImportedTitle(id, title)
             dao.upsert(SessionEntity(
                 id = id, title = title, createdAt = createdAt,
                 updatedAt = if (lastTime > 0) lastTime else System.currentTimeMillis(),
@@ -644,9 +645,20 @@ class SessionStore @Inject constructor(
 
     // ---- session management ----------------------------------------------------------------------
 
+    /** 导入会话的标题锁定：导入时按目录名命名，引擎自动生成的标题不能覆盖（用户手动改名会解除）。 */
+    private fun titleLockPrefs() = context.getSharedPreferences("imported_titles", Context.MODE_PRIVATE)
+
+    private fun lockImportedTitle(id: String, title: String) {
+        titleLockPrefs().edit().putString(id, title).apply()
+    }
+
+    private fun lockedTitle(id: String): String? = titleLockPrefs().getString(id, null)
+
     /** The DSH 修改 conversation is title-locked: renames are ignored. */
     suspend fun rename(sessionId: String, title: String) {
         if (sessionId == io.github.jackwener.dsh.core.model.SessionModes.DSH_MODIFY_ID) return
+        // 用户手动改名 → 解除导入锁，之后再跟引擎标题走
+        titleLockPrefs().edit().remove(sessionId).apply()
         dao.setTitle(sessionId, title); mutate(sessionId) { it.copy(title = title) }
     }
     /** Creates the fixed DSH 修改 conversation row on first use (title-locked, full access, its own mode). */
@@ -1063,7 +1075,11 @@ class SessionStore @Inject constructor(
                 else noteBackgroundSession(sessionId)
                 val logged = LoggedEvent(seq, type, time, data)
                 mutate(sessionId) { s -> if (s.events.any { it.seq == seq }) s else s.copy(events = s.events + logged).withLogged(logged) }
-                if (type == "session/title") data.s("title")?.let { rename(sessionId, it) }
+                if (type == "session/title") data.s("title")?.let { t ->
+                    // 导入的会话按导入时的名字显示：引擎后续生成的标题不覆盖（rename() 会解锁，用户改名照常生效）
+                    val locked = lockedTitle(sessionId)
+                    if (locked == null) rename(sessionId, t) else mutate(sessionId) { it.copy(title = locked) }
+                }
                 if (type == "assistant/message" || type == "assistant/attempt") recordUsage(data)
             }
             "session.status" -> {
