@@ -590,6 +590,12 @@ private fun AboutSection(vm: SettingsViewModel) {
             EngineState.Stopped -> stringResource(R.string.engine_idle); is EngineState.Failed -> e.message.take(300)
         }, leading = { StateDot(when (engine) { EngineState.Ready -> DotKind.Done; is EngineState.Failed -> DotKind.Error; else -> DotKind.Idle }) },
             trailing = { DButton(stringResource(R.string.restart_engine), { vm.restartEngine(); vm.runDoctor() }, variant = BtnVariant.Outline, size = BtnSize.Sm) })
+        // 导入/导出失败日志：放在「引擎」下面，和引擎日志挨着，方便直接看/截图
+        val transferError by vm.transferError.collectAsStateWithLifecycle()
+        transferError?.let { err ->
+            Text("导入/导出日志：" + err, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+                style = DshType.xxs12, color = c.labelTertiary)
+        }
         // A plugin that keeps the engine from starting: start once with every third-party plugin paused (PLUGINS-DESIGN §7.6).
         val ext: io.github.jackwener.dsh.feature.extensions.ExtensionsViewModel = hiltViewModel()
         SettingsRow(stringResource(R.string.ext_safe_mode_start), stringResource(R.string.ext_safe_mode_start_desc),

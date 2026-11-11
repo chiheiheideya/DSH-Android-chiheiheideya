@@ -279,6 +279,9 @@ class SettingsViewModel @Inject constructor(
     /** 会话导入进度（null = 空闲），设置页显示「正在导入 2/3：会话名」。 */
     val importProgress = sessions.importProgress
 
+    /** 最近一次导入/导出的失败原因（设置页显示在「引擎」下方）。 */
+    val transferError = sessions.transferError
+
     /** 导出全部会话 (migration to another build). */
     fun exportSessions(onDone: (String) -> Unit) = viewModelScope.launch {
         onDone(runCatching { sessions.exportSessions() }.getOrElse { "导出失败：" + (it.message ?: "未知错误") })

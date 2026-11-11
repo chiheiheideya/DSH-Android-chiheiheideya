@@ -325,6 +325,8 @@ export function importSessions({ dir, home, cwd, writeLog = false, dryRun = fals
     }
     if (writeLog && !dryRun) {
       const target = path.join(sessionsDir, id)
+      // 重复导入：先删掉旧的（可能不合法、会让 resume 失败 → create 撞 already exists）
+      fs.rmSync(target, { recursive: true, force: true })
       fs.mkdirSync(target, { recursive: true })
       logPath = path.join(target, 'session.v4.jsonl.zstd')
       // 重建成引擎一定能 resume 的日志：模型才会带着旧上下文继续（否则只是"看得见"）

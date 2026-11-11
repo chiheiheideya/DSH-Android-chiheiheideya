@@ -178,6 +178,9 @@ class SessionStore @Inject constructor(
 
     val importProgress = MutableStateFlow<ImportProgress?>(null)
 
+    /** 最近一次导入/导出失败的原因（设置页显示在「引擎」下方，方便截图给人看）。 */
+    val transferError = MutableStateFlow<String?>(null)
+
     suspend fun importSessionsFromStaging() = withContext(Dispatchers.IO) {
         val dir = File(context.filesDir, "dsh-home/android/import-sessions")
         if (!dir.isDirectory) return@withContext
@@ -205,9 +208,11 @@ class SessionStore @Inject constructor(
             // 处理过的目录挪走，避免每次启动重复导入
             dir.renameTo(File(dir.parentFile, "import-sessions-done-" + System.currentTimeMillis()))
             runCatching { errorFile.delete() }
+            transferError.value = null
         } catch (e: Throwable) {
             // 把原因落盘：设置页提示"导入失败"，这里留可读的细节
             runCatching { errorFile.writeText((e.message ?: e.javaClass.name) + "\n") }
+            transferError.value = "导入失败：" + (e.message ?: e.javaClass.simpleName)
             android.util.Log.w(TAG, "import sessions from staging failed", e)
             throw e
         } finally {
@@ -512,7 +517,14 @@ class SessionStore @Inject constructor(
         } catch (e: EngineStartException) {
             fail(sessionId, "engine", e.message ?: "", e.log, retryText)
         } catch (e: JsonRpcException) {
-            fail(sessionId, "engine", e.message ?: "", e.code.toString(), retryText)
+            // 重复导入 / 旧日志不合法时引擎只会说 "already exists"：换成一句人话，别把英文技术错误甩给用户
+            if (SessionOpen.alreadyExists(e.message)) {
+                fail(sessionId, "engine",
+                    "这个会话的引擎日志读不出来（多半是从旧版本导入的）。去 设置 → 关于 →「导入数据（文件夹）」重新导入它，或者删掉这个会话重来。",
+                    e.code.toString(), retryText)
+            } else {
+                fail(sessionId, "engine", e.message ?: "", e.code.toString(), retryText)
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -867,6 +879,7 @@ class SessionStore @Inject constructor(
             exportSessionsInner()
         } catch (e: Throwable) {
             android.util.Log.w(TAG, "export sessions failed", e)
+            transferError.value = "导出失败：" + (e.message ?: e.javaClass.simpleName)
             "导出失败：" + (e.message ?: e.javaClass.simpleName)
         }
     }
