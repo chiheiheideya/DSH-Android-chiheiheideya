@@ -176,6 +176,33 @@ private fun ConversationPane(vm: HomeViewModel, onMenu: () -> Unit, onSettings: 
         androidx.compose.runtime.LaunchedEffect(dhzTip) { if (dhzTip) { kotlinx.coroutines.delay(3000); dhzPrompt = false } }
         androidx.compose.runtime.LaunchedEffect(shzTip) { if (shzTip) { kotlinx.coroutines.delay(3000); shzPrompt = false } }
         androidx.compose.runtime.LaunchedEffect(shzState) { if (shzState.ready) shzPrompt = false }
+        // Android 的安全机制：**覆盖安装/升级**会把该 App 的无障碍服务自动关掉（与前台无关），
+        // 这是系统行为、App 无法自行重开。这里只在"版本变了 + 无障碍掉了"时提示一次。
+        val lastBuild = promptPrefs.getInt("last_build", 0)
+        val a11yLost = io.github.jackwener.dsh.service.DshAccessibilityService.instance == null
+        var a11yLostPrompt by remember {
+            mutableStateOf(
+                a11yLost && lastBuild in 1 until io.github.jackwener.dsh.BuildConfig.VERSION_CODE &&
+                    promptPrefs.getInt("a11y_prompt_build", 0) != io.github.jackwener.dsh.BuildConfig.VERSION_CODE
+            )
+        }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            promptPrefs.edit().putInt("last_build", io.github.jackwener.dsh.BuildConfig.VERSION_CODE).apply()
+        }
+        if (a11yLostPrompt) {
+            Row(Modifier.fillMaxWidth().clip(Radius.panel).background(c.bgLayer2).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("App 更新后，Android 会把无障碍服务自动关掉（系统安全机制，和前台/后台无关）。重新开一次即可。", Modifier.weight(1f), style = DshType.xs13, color = c.labelSecondary)
+                io.github.jackwener.dsh.core.designsystem.DButton("去开启", {
+                    runCatching { bannerCtx.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                    promptPrefs.edit().putInt("a11y_prompt_build", io.github.jackwener.dsh.BuildConfig.VERSION_CODE).apply()
+                    a11yLostPrompt = false
+                }, variant = io.github.jackwener.dsh.core.designsystem.BtnVariant.Outline, size = io.github.jackwener.dsh.core.designsystem.BtnSize.Sm)
+                io.github.jackwener.dsh.core.designsystem.DButton("知道了", {
+                    promptPrefs.edit().putInt("a11y_prompt_build", io.github.jackwener.dsh.BuildConfig.VERSION_CODE).apply()
+                    a11yLostPrompt = false
+                }, size = io.github.jackwener.dsh.core.designsystem.BtnSize.Sm)
+            }
+        }
         if (dhzPrompt) {
             Row(Modifier.fillMaxWidth().clip(Radius.panel).background(c.bgLayer2).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (dhzTip) "在设置 → 权限 找到我" else "启用 Dhizuku 设备所有者权限？可管理应用、锁屏、禁用摄像头等（十分危险，请谨慎使用）", Modifier.weight(1f), style = DshType.xs13, color = c.labelSecondary)
