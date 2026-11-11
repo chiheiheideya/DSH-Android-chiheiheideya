@@ -187,9 +187,9 @@ class SessionStore @Inject constructor(
         if (sessions.isEmpty()) return@withContext
         val errorFile = File(context.filesDir, "dsh-home/android/import-error.txt")
         try {
-            // engine.sdk() 会启动并等待引擎就绪；以前用 sdkIfReady() 轮询，引擎慢一点就直接放弃，
-            // 表现为"导入没反应"。
-            val sdk = engine.sdk()
+            // control() 是给登录/配置用的通道：**没登录也能把引擎拉起来**（sdk() 会抛 NoCredentialsException，
+            // 而导入是本地操作，不该依赖登录 —— 之前"导入失败"就是这个原因）。
+            val sdk = engine.control()
             var done = 0
             for (sessionDir in sessions) {
                 importProgress.value = ImportProgress(done, sessions.size, sessionDir.name)
