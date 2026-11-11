@@ -199,7 +199,7 @@ class SessionStore @Inject constructor(
                 val result = sdk.request("android/session/import", buildJsonObject {
                     put("dir", dir.absolutePath)
                     put("only", sessionDir.name) // 一次一个会话：请求短、能报进度
-                    put("writeLog", true) // 写重建日志：这次补了 message.source，导入后应能带着上下文继续
+                    put("writeLog", false) // 只读式：重建日志还没过引擎校验，先保证导入后能正常使用
                 })
                 writeImportedSession(result as? JsonObject)
                 done++
@@ -858,18 +858,9 @@ class SessionStore @Inject constructor(
      * 但 Android 11+ 下写入 Download 可能 EACCES（目录被别的应用/旧构建占用），
      * 所以先试写一次；不行就退回 App 专属目录 `/sdcard/Android/data/com.dsh.chiheiheideya/files/`（必定可写）。
      */
-    private fun sessionsExportDir(): File {
-        val download = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DSH-chiheiheideya")
-            .resolve("sessions-export")
-        val writable = runCatching {
-            download.mkdirs()
-            val probe = File(download, ".probe")
-            probe.writeText("ok")
-            probe.delete()
-            true
-        }.getOrDefault(false)
-        return if (writable) download else File(context.getExternalFilesDir(null) ?: context.filesDir, "sessions-export").apply { mkdirs() }
-    }
+    private fun sessionsExportDir(): File =
+        // 直接写 App 专属目录：不依赖 Download 的存储权限，必定可写（路径会在提示里显示）
+        File(context.getExternalFilesDir(null) ?: context.filesDir, "sessions-export").apply { mkdirs() }
 
     /** 导入/导出暂存目录（App 私有）：引擎侧转换后由 [importSessionsFromStaging] 落库。 */
     private fun sessionImportStaging(): File = File(context.filesDir, "dsh-home/android/import-sessions").apply { mkdirs() }
