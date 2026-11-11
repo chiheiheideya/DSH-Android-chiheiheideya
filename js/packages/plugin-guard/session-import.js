@@ -240,7 +240,7 @@ export function buildResumeLog(rows, { id, createdAt, cwd }) {
       push('turn/start', { turn })
       push('step/start', { turn, step: 1 })
       open = true
-      push('user/message', { content: [{ type: 'text', text: m.text }], source: { kind: 'user' }, role: 'user', id: crypto.randomUUID() }, { surfaceOp: 'append' })
+      push('user/message', { content: [{ type: 'text', text: m.text }], source: { kind: 'user', rpcId: crypto.randomUUID(), clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }, role: 'user', id: crypto.randomUUID() }, { surfaceOp: 'append' })
     } else {
       if (!open) {
         turn += 1

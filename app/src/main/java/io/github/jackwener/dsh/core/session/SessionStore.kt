@@ -843,7 +843,8 @@ class SessionStore @Inject constructor(
 
     /** 会话导出目录（共享存储，另一个版本可以导入）：Download/DSH-Android/sessions-export/。 */
     private fun sessionsExportDir(): File =
-        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DSH-Android").apply { mkdirs() }
+        // 注意：用本包独占的目录名。/sdcard/Download/DSH-Android 是别的构建创建的，本包写它会 EACCES。
+        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DSH-chiheiheideya").apply { mkdirs() }
             .resolve("sessions-export")
 
     /** 导入/导出暂存目录（App 私有）：引擎侧转换后由 [importSessionsFromStaging] 落库。 */
