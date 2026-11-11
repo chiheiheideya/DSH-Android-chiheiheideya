@@ -199,7 +199,7 @@ class SessionStore @Inject constructor(
                 val result = sdk.request("android/session/import", buildJsonObject {
                     put("dir", dir.absolutePath)
                     put("only", sessionDir.name) // 一次一个会话：请求短、能报进度
-                    put("writeLog", false) // 暂时只读式导入：重建日志还过不了新版校验，发消息会报"日志读不出来"
+                    put("writeLog", true) // 写重建日志：这次补了 message.source，导入后应能带着上下文继续
                 })
                 writeImportedSession(result as? JsonObject)
                 done++
@@ -520,7 +520,7 @@ class SessionStore @Inject constructor(
             // 重复导入 / 旧日志不合法时引擎只会说 "already exists"：换成一句人话，别把英文技术错误甩给用户
             if (SessionOpen.alreadyExists(e.message)) {
                 fail(sessionId, "engine",
-                    "这个会话的引擎日志读不出来（多半是从旧版本导入的）。去 设置 → 关于 →「导入数据（文件夹）」重新导入它，或者删掉这个会话重来。",
+                    "这个会话的引擎日志读不出来（多半是从旧版本导入的）。去 设置 → 关于 →「导入数据（文件夹）」重新导入它，或者删掉这个会话重来。\n〔原始错误〕" + (e.message ?: ""),
                     e.code.toString(), retryText)
             } else {
                 fail(sessionId, "engine", e.message ?: "", e.code.toString(), retryText)

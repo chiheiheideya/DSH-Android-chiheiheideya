@@ -248,7 +248,7 @@ export function buildResumeLog(rows, { id, createdAt, cwd }) {
         push('step/start', { turn, step: 1 })
         open = true
       }
-      push('assistant/message', { turn, step: 1, message: { id: crypto.randomUUID(), role: 'assistant', content: [{ type: 'text', text: m.text }] } }, { surfaceOp: 'append' })
+      push('assistant/message', { turn, step: 1, message: { id: crypto.randomUUID(), role: 'assistant', content: [{ type: 'text', text: m.text }], source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-chat', replayState: { response: { kind: 'deepseek-messages', version: 1, model: 'deepseek-chat' }, blocks: [{ type: 'text' }] } } } }, { surfaceOp: 'append' })
     }
   }
   closeTurn()

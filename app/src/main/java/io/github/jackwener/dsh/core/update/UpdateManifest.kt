@@ -47,8 +47,9 @@ data class UpdateManifest(
          * jsDelivr CDNs the engine falls back to, js/packages/plugin-extensions/fetch-sources.js).
          */
         val SOURCES = listOf(
-            "https://github.com/$REPO/releases/latest/download/update.json",
+            // raw 优先：GitHub release 的 download 链接在部分网络下 404/超时
             "https://raw.githubusercontent.com/$REPO/main/update/latest.json",
+            "https://github.com/$REPO/releases/latest/download/update.json",
             "https://cdn.jsdelivr.net/gh/$REPO@main/update/latest.json",
             "https://fastly.jsdelivr.net/gh/$REPO@main/update/latest.json",
             "https://gcore.jsdelivr.net/gh/$REPO@main/update/latest.json",
