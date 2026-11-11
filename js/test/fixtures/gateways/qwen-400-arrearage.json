@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Access denied, please make sure your account is in good standing.",
+    "type": "Arrearage",
+    "param": null,
+    "code": "Arrearage"
+  }
+}

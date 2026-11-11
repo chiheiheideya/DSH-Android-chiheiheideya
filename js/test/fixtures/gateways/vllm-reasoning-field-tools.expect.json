@@ -1,0 +1,34 @@
+{
+  "provider": "vLLM (OpenAI-compatible server)",
+  "source": "from docs: docs.vllm.ai reasoning_outputs (current releases stream thinking as `delta.reasoning`), gpt-oss with the openai tool parser; no include_usage",
+  "model": "openai/gpt-oss-120b",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "usage": null,
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning"
+    ]
+  },
+  "echo": {
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "absent": [
+      "reasoning_content",
+      "reasoning_details"
+    ]
+  },
+  "body": "vllm-reasoning-field-tools.sse"
+}

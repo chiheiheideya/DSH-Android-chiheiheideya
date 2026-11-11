@@ -1,0 +1,32 @@
+--- a/@deepseek-ai/dsh-sdk-jsonrpc-server/lib/index.js
++++ b/@deepseek-ai/dsh-sdk-jsonrpc-server/lib/index.js
+@@ -91,6 +91,11 @@
+ 			if (!this.userQuestionsEnabled || agent === void 0 || !this.ownsAgent(agent)) return next();
+ 			return this.askUserQuestion(request, String(agent.session.id));
+ 		}));
++		// DSH-Android: notifications contributed by profile plugins (see `sdkExtensions` below).
++		this.disposers.push(ctx.on("sdk-extensions/notify", (method, params) => {
++			if (typeof method !== "string" || method.length === 0 || this.shuttingDown) return;
++			try { this.transport.notify(method, params ?? {}); } catch {}
++		}));
+ 		const serverOptions = this.options;
+ 		this.disposers.push(ctx.on("session/event", (session, event) => {
+ 			const record = this.sessions.get(session.id);
+@@ -395,7 +400,16 @@
+ 					path: params.path
+ 				});
+ 			case "shutdown": return this.shutdown();
+-			default: throw new Error(`unknown DeepSeek Harness SDK runtime method: ${method}`);
++			default: {
++				// DSH-Android: methods contributed by profile plugins through the
++				// `sdkExtensions` service ({ resolve(method) → handler | undefined },
++				// @dsh-android/plugin-account) or a `sdk-extensions/resolve` bail listener
++				// (@dsh-android/plugin-guard). They do not require `initialize`, but wait for the loader like it does.
++				await this.ctx.get("loader")?.await();
++				const extension = this.ctx.get("sdkExtensions")?.resolve(method) ?? this.ctx.bail("sdk-extensions/resolve", method);
++				if (typeof extension === "function") return await extension(params ?? {}, this.lifetime.signal) ?? {};
++				throw new Error(`unknown DeepSeek Harness SDK runtime method: ${method}`);
++			}
+ 		}
+ 	}
+ 	async getOrCreateSession(sessionId) {

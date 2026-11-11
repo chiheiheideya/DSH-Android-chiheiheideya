@@ -1,0 +1,41 @@
+{
+  "provider": "vLLM (OpenAI-compatible server)",
+  "source": "from docs: docs.vllm.ai reasoning_outputs + tool_calling (--reasoning-parser qwen3, hermes tool parser; versions before the `reasoning` rename emit `reasoning_content`; tool call name in the first fragment, `arguments` in later ones; include_usage chunk with prompt_tokens_details null)",
+  "model": "Qwen/Qwen3-8B",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "chatcmpl-tool-scrubbed01"
+      }
+    ],
+    "usage": {
+      "inputTokens": 150,
+      "outputTokens": 40,
+      "totalTokens": 190,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_content"
+    ]
+  },
+  "echo": {
+    "reasoning_content": "The user wants the weather in Paris. I should call get_weather.",
+    "absent": [
+      "reasoning",
+      "reasoning_details"
+    ]
+  },
+  "body": "vllm-reasoning-content-tools.sse"
+}

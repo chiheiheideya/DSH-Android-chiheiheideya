@@ -1,0 +1,63 @@
+--- a/@deepseek-ai/dsh-sdk-jsonrpc-server/lib/index.js
++++ b/@deepseek-ai/dsh-sdk-jsonrpc-server/lib/index.js
+@@ -120,6 +120,16 @@
+ 				status
+ 			});
+ 		}));
++		// DSH-Android (js patch 21): a turn that ends in an error stops the driver with input steered
++		// into it still unclaimed (dsh would hand it to whatever prompt comes next). Run it now, as a
++		// turn of its own, once this idle has been reported.
++		this.disposers.push(ctx.on("agent/status", ({ agent, status }) => {
++			if (status !== "idle" || this.sessions.get(String(agent.session.id))?.handle.agent !== agent) return;
++			setImmediate(() => {
++				if (this.shuttingDown || this.ctx.agents.get(agent.id) !== agent || agent.status !== "idle") return;
++				if (agent.inbox?.hasPending === true && typeof agent.wakeDriver === "function") agent.wakeDriver();
++			});
++		}));
+ 		this.disposers.push(ctx.on("session/created", (session) => {
+ 			const parentSession = session.header.parentSession;
+ 			if (parentSession === void 0) return;
+@@ -199,8 +209,14 @@
+ 			content,
+ 			source: clientTimeZone === void 0 ? { kind: "user" } : { kind: "user", rpcId: randomUUID(), clientTimeZone }
+ 		});
+-		rec.handle.agent.followup(message);
+-		return { messageId: message.id };
++		// DSH-Android (js patch 21): `mode: "steer"` hands the prompt to the running turn (dsh's
++		// Agent.steer, the Web host's steer mode: claimed at the next step boundary, before the next
++		// model request) instead of queueing a turn after it. An idle session starts a turn as usual;
++		// `delivery` says which happened.
++		const steer = promptMode(params.mode) === "steer" && rec.handle.agent.status === "running";
++		if (steer) rec.handle.agent.steer(message);
++		else rec.handle.agent.followup(message);
++		return { messageId: message.id, delivery: steer ? "step" : "turn" };
+ 	}
+ 	/**
+ 	* Restore a persisted session and repair its interrupted final turn without sending input.
+@@ -214,7 +230,12 @@
+ 		if (this.shuttingDown) throw new Error("SDK server is shutting down");
+ 		const sessionId = params.sessionId;
+ 		if (this.sessions.has(sessionId) || this.sessionCreations.has(sessionId)) throw new Error(`SDK session is already open or opening: ${sessionId}`);
+-		await this.openSession(sessionId, true);
++		const rec = await this.openSession(sessionId, true);
++		// DSH-Android (js patch 21): input a dead process never ran (a steer or a queued prompt still
++		// pending in the log) is dropped, with a logged inbox splice: the app hands it back to the
++		// user, and the next prompt would otherwise claim it again along with its own message.
++		const inbox = rec.handle.agent.inbox;
++		if (rec.handle.agent.status === "idle" && inbox?.hasPending) inbox.clear();
+ 		return {};
+ 	}
+ 	/**
+@@ -460,6 +481,12 @@
+ 	}
+ };
+ //#endregion
++/** DSH-Android (js patch 21): `session/prompt` delivery mode; undefined = dsh's own followup. */
++function promptMode(value) {
++	if (value === void 0 || value === null || value === "followup") return "followup";
++	if (value === "steer") return "steer";
++	throw new TypeError("session/prompt mode must be \"followup\" or \"steer\"");
++}
+ /** DSH-Android: a canonical IANA zone for prompt sources, or undefined (dsh-time-context rejects others). */
+ function promptTimeZone(value) {
+ 	const zone = typeof value === "string" && value !== "" ? value : process.env.TZ;

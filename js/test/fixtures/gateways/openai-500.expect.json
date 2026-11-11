@@ -1,0 +1,16 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/guides/error-codes",
+  "model": "gpt-4.1",
+  "http": {
+    "status": 500,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "SERVER",
+      "status": 500
+    }
+  },
+  "body": "openai-500.json"
+}

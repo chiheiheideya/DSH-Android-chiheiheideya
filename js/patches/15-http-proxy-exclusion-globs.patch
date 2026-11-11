@@ -1,0 +1,24 @@
+--- a/@deepseek-ai/dsh-http-proxy/lib/index.js
++++ b/@deepseek-ai/dsh-http-proxy/lib/index.js
+@@ -209,6 +209,7 @@
+ * Decide whether a bypass list exempts one URL. An entry names a host and matches it together with
+ * every subdomain under it — `example.com` also bypasses `api.example.com` — and a leading `.` or
+ * `*.` is accepted as the same thing; an entry may carry a `:port`, and `*` bypasses everything.
++* Any other `*` matches any run of characters over the whole host (patch 15).
+ * CIDR notation is not matched —
+ * an operating system's bypass list often carries `10.0.0.0/8`, which must be rewritten as suffixes.
+ *
+@@ -227,6 +228,13 @@
+ 		if (split.port !== void 0 && split.port !== port) continue;
+ 		const candidate = split.host.replace(/^\*?\./, "").replace(/\.$/, "");
+ 		if (candidate === "") continue;
++		// DSH-Android (patch 15): any other `*` is an Android/Java exclusion-list glob over the whole
++		// host, e.g. `192.168.*` or `10.*` (ProxyInfo.getExclusionList), which suffixes cannot express.
++		if (candidate.includes("*")) {
++			const glob = candidate.split("*").map((part) => part.replace(/[.+?^$()|[\]{}\\]/g, "\\$&")).join(".*");
++			if (new RegExp(`^${glob}$`, "u").test(host)) return true;
++			continue;
++		}
+ 		if (host === candidate || host.endsWith(`.${candidate}`)) return true;
+ 	}
+ 	return false;

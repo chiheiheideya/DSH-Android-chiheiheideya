@@ -1,0 +1,6 @@
+{
+  "error": {
+    "message": "Your account org-scrubbed <ak-scrubbed> is suspended, please check your plan and billing details",
+    "type": "exceeded_current_quota_error"
+  }
+}

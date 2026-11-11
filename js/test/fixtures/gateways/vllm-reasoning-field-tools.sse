@@ -1,0 +1,18 @@
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"openai/gpt-oss-120b","choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"openai/gpt-oss-120b","choices":[{"index":0,"delta":{"reasoning":"The user wants the w"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"openai/gpt-oss-120b","choices":[{"index":0,"delta":{"reasoning":"eather in Paris. I s"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"openai/gpt-oss-120b","choices":[{"index":0,"delta":{"reasoning":"hould call get_weath"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"openai/gpt-oss-120b","choices":[{"index":0,"delta":{"reasoning":"er."},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"openai/gpt-oss-120b","choices":[{"index":0,"delta":{"tool_calls":[{"id":"chatcmpl-tool-scrubbed02","type":"function","index":0,"function":{"name":"get_weather","arguments":""}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"openai/gpt-oss-120b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"city\": \"Paris\"}"}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"openai/gpt-oss-120b","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+

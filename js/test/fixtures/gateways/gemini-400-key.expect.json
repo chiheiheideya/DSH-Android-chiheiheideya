@@ -1,0 +1,17 @@
+{
+  "provider": "Google Gemini OpenAI compatibility (generativelanguage.googleapis.com/v1beta/openai)",
+  "source": "from docs: ai.google.dev/gemini-api/docs/troubleshooting (OpenAI-compat endpoint wraps errors in a list)",
+  "model": "gemini-2.5-flash",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "basePath": "/v1beta/openai",
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 400
+    }
+  },
+  "body": "gemini-400-key.json"
+}

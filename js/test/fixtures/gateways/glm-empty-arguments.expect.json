@@ -1,0 +1,21 @@
+{
+  "provider": "Zhipu GLM (open.bigmodel.cn/api/paas/v4)",
+  "source": "from docs: tool without parameters streamed with arguments \"\" (seen across GLM / Qwen compat endpoints in client issue trackers)",
+  "model": "glm-4.6",
+  "basePath": "/api/paas/v4",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "get_time",
+        "arguments": {}
+      }
+    ],
+    "usage": null,
+    "finish": "tool-calls"
+  },
+  "body": "glm-empty-arguments.sse"
+}

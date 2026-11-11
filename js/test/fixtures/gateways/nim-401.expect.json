@@ -1,0 +1,17 @@
+{
+  "provider": "NVIDIA NIM (integrate.api.nvidia.com/v1)",
+  "source": "from docs: NVIDIA API catalog problem+json errors ({\"status\",\"title\",\"detail\"})",
+  "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+  "http": {
+    "status": 401,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "AUTH",
+      "status": 401,
+      "messageIncludes": "Authentication failed"
+    }
+  },
+  "body": "nim-401.json"
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow_external_apps">允许其他 App 调用</string>
+    <string name="allow_external_apps_desc">其他 App 可以通过 RUN_TASK 让 DSH 执行任务（不附带屏幕内容）。默认关闭。</string>
+    <string name="external_refused">%1$s 请求 DSH 执行任务，已拒绝。可在 设置 → 通用 → 允许其他 App 调用 中开启。</string>
+    <string name="external_unknown_app">其他 App</string>
+    <string name="err_interrupted_previous">上次运行时 App 被系统结束，本轮已中断。点“继续”接着做。</string>
+    <string name="err_engine_crash_loop">智能体引擎连续崩溃，已暂停自动恢复。可在 设置 → 关于 → 自检 查看崩溃记录，或点“继续”重试。</string>
+    <string name="engine_recovering">引擎意外退出，正在自动重启并继续……</string>
+    <string name="err_bg_start">系统不允许在后台启动引擎（通常是电池优化被重新开启）。已发通知，点它即可执行。</string>
+    <string name="deferred_title">点此执行：%1$s</string>
+    <string name="deferred_text">系统阻止了后台启动，点一下由你来启动这次自动化。授予“不受电池优化限制”可避免这种情况。</string>
+    <string name="ime_label">DSH 输入法</string>
+    <string name="ime_bar">DSH 输入法（供智能体输入文字）· 点此切回你的键盘</string>
+    <string name="engine_last_exit">上次引擎异常退出</string>
+    <string name="err_open_doctor">查看自检</string>
+</resources>

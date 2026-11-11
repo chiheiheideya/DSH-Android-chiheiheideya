@@ -1,0 +1,130 @@
+--- a/@snnh/dsh-llm-service-lite/lib/index.js
++++ b/@snnh/dsh-llm-service-lite/lib/index.js
+@@ -2728,18 +2728,103 @@
+ * @param aborted - the caller's own signal, to distinguish cancellation from failure.
+ * @returns the classified failure.
+ */
+-function classifyTransport(error, aborted) {
++function classifyTransport(error, aborted, baseURL) {
+ 	if (error instanceof LlmError) return error;
+ 	if (aborted) return new LlmError("llm-service-lite: request aborted", "ABORTED", { cause: error });
+ 	const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+-	return error instanceof TypeError || [
+-		"ECONNRESET",
+-		"ECONNREFUSED",
+-		"ETIMEDOUT",
+-		"EAI_AGAIN",
+-		"UND_ERR_SOCKET",
+-		"UND_ERR_CONNECT_TIMEOUT"
+-	].includes(code) ? new LlmError("llm-service-lite: provider transport failed", "TRANSPORT", { cause: error }) : new LlmError("llm-service-lite: provider request failed", "UNKNOWN", { cause: error });
++	// DSH-Android (patch 14): the message names the root cause and the target, since the cause chain
++	// does not survive the trip to the app (TypeError('fetch failed') alone tells the user nothing).
++	const detail = describeTransportCause(error, baseURL);
++	const suffix = detail === "" ? "" : `: ${detail}`;
++	return error instanceof TypeError || TRANSPORT_RETRYABLE_CODES.includes(code) ? new LlmError(`llm-service-lite: provider transport failed${suffix}`, "TRANSPORT", { cause: error }) : new LlmError(`llm-service-lite: provider request failed${suffix}`, "UNKNOWN", { cause: error });
++}
++/**
++* DSH-Android (patch 14). Codes a bare (non-TypeError) throw may carry and still count as a
++* transient network failure. ENOTFOUND and certificate errors are deliberately absent: they do not
++* heal by repeating the request. (undici wraps every fetch failure in a TypeError, which stays
++* TRANSPORT whatever its cause, as upstream.)
++*/
++const TRANSPORT_RETRYABLE_CODES = [
++	"ECONNRESET",
++	"ECONNREFUSED",
++	"ETIMEDOUT",
++	"EAI_AGAIN",
++	"EHOSTUNREACH",
++	"ENETUNREACH",
++	"ENETDOWN",
++	"EPIPE",
++	"ECONNABORTED",
++	"UND_ERR_SOCKET",
++	"UND_ERR_CONNECT_TIMEOUT",
++	"UND_ERR_HEADERS_TIMEOUT",
++	"UND_ERR_BODY_TIMEOUT"
++];
++/** Short English gloss per root-cause code (the app maps the code itself to a localized hint). */
++const TRANSPORT_CAUSE_TEXT = {
++	ECONNREFUSED: "connection refused",
++	ECONNRESET: "connection reset",
++	ECONNABORTED: "connection aborted",
++	EPIPE: "connection closed",
++	ETIMEDOUT: "connect timed out",
++	UND_ERR_CONNECT_TIMEOUT: "connect timed out",
++	UND_ERR_HEADERS_TIMEOUT: "no response headers in time",
++	UND_ERR_BODY_TIMEOUT: "response body stalled",
++	UND_ERR_SOCKET: "socket closed",
++	EHOSTUNREACH: "host unreachable",
++	ENETUNREACH: "network unreachable",
++	ENETDOWN: "network down",
++	ENOTFOUND: "DNS lookup failed",
++	EAI_AGAIN: "DNS lookup timed out",
++	EAI_NODATA: "DNS lookup failed",
++	EAI_NONAME: "DNS lookup failed"
++};
++const TLS_CAUSE = /^(?:ERR_TLS_|ERR_SSL_|CERT_|UNABLE_TO_|DEPTH_ZERO_|SELF_SIGNED_|HOSTNAME_MISMATCH|ERR_OSSL_)/u;
++/**
++* The innermost coded error of a transport failure: undici nests `TypeError('fetch failed')` →
++* `cause` (an `Error` with `code`, `address`, `port`; or an `AggregateError` of per-address
++* attempts). Falls back to the innermost error with a message.
++*/
++function transportRootCause(error) {
++	let coded;
++	let last;
++	const seen = /* @__PURE__ */ new Set();
++	const visit = (value, depth) => {
++		if (typeof value !== "object" || value === null || seen.has(value) || depth > 8) return;
++		seen.add(value);
++		if (depth > 0 && typeof value.message === "string" && value.message !== "") last = value;
++		if (typeof value.code === "string" && value.code !== "" && !value.code.startsWith("ERR_INVALID_ARG")) coded = value;
++		if (Array.isArray(value.errors)) for (const inner of value.errors) {
++			const before = coded;
++			visit(inner, depth + 1);
++			if (coded !== before) break;
++		}
++		visit(value.cause, depth + 1);
++	};
++	visit(error, 0);
++	return coded ?? last;
++}
++/** Paths, queries and credentials never leave the adapter: URLs in a cause message become their origin. */
++function redactUrls(text) {
++	return text.replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s'"<>]+/giu, (url) => URL.parse(url)?.origin ?? "<url>");
++}
++/**
++* One-line root cause of a transport failure plus the target `host:port`, e.g.
++* `ECONNREFUSED 192.168.1.5:8080 (connection refused)`. Never the API key or full URL.
++*
++* @param error - the thrown value.
++* @param baseURL - the route's endpoint, for the target when the cause carries no address.
++* @returns the description, or "" when nothing useful is known.
++*/
++function describeTransportCause(error, baseURL) {
++	const root = transportRootCause(error);
++	const code = typeof root?.code === "string" ? root.code : "";
++	let target = "";
++	const url = typeof baseURL === "string" ? URL.parse(baseURL) : null;
++	if (url !== null && url.hostname !== "") target = `${url.hostname}:${url.port || (url.protocol === "https:" ? "443" : "80")}`;
++	else if (typeof root?.address === "string") target = `${root.address.includes(":") ? `[${root.address}]` : root.address}${root.port === void 0 ? "" : `:${root.port}`}`;
++	const own = typeof root?.message === "string" ? redactUrls(root.message).replace(/\s+/gu, " ").trim().slice(0, 200) : "";
++	const text = TRANSPORT_CAUSE_TEXT[code] ?? (TLS_CAUSE.test(code) ? `TLS certificate rejected: ${own}` : own);
++	return [code, target, text === "" || text === code ? "" : `(${text})`].filter((part) => part !== "").join(" ");
+ }
+ //#endregion
+ //#region lib/types/anthropic-stream.js
+@@ -4783,7 +4868,7 @@
+ 				}
+ 			} catch (error) {
+ 				if (timeoutOf(watchdog.signal, IDLE_CODE) !== void 0) throw new LlmError(`llm-service-lite: provider "${profile.provider}" stream idle timeout`, "TIMEOUT", { cause: error });
+-				throw classifyTransport(error, options.signal?.aborted === true);
++				throw classifyTransport(error, options.signal?.aborted === true, profile.baseURL);
+ 			} finally {
+ 				lease?.release();
+ 				consumer.abort();
+@@ -5526,4 +5611,4 @@
+ 	});
+ }
+ //#endregion
+-export { ConcurrencyLimiter, Config, DISCOVERY_MAX_RESPONSE_BYTES, LISTABLE_INTERFACE_TYPES, OwcProfilesAdapter, apply, convertOfficialProvider, discoverEndpointModels, inject, modelOf, name, resolveProfiles };
++export { ConcurrencyLimiter, Config, DISCOVERY_MAX_RESPONSE_BYTES, LISTABLE_INTERFACE_TYPES, OwcProfilesAdapter, apply, classifyTransport, convertOfficialProvider, describeTransportCause, discoverEndpointModels, inject, modelOf, name, resolveProfiles };

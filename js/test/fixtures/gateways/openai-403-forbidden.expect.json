@@ -1,0 +1,17 @@
+{
+  "provider": "generic OpenAI-compatible gateway",
+  "source": "from docs (synthetic): a bare 403 with no model wording stays AUTH",
+  "model": "gpt-5",
+  "http": {
+    "status": 403,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "AUTH",
+      "status": 403,
+      "messageIncludes": "Forbidden"
+    }
+  },
+  "body": "openai-403-forbidden.json"
+}

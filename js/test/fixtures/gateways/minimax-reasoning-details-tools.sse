@@ -1,0 +1,12 @@
+data: {"id":"scrubbed","choices":[{"index":0,"delta":{"role":"assistant","name":"MiniMax AI","audio_content":"","content":"","reasoning_details":[{"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","index":0,"text":"The user wants the we"}]},"finish_reason":null}],"created":1793380000,"model":"MiniMax-M2","object":"chat.completion.chunk"}
+
+data: {"id":"scrubbed","choices":[{"index":0,"delta":{"role":"assistant","name":"MiniMax AI","audio_content":"","content":"","reasoning_details":[{"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","index":0,"text":"ather in Paris. I sho"}]},"finish_reason":null}],"created":1793380000,"model":"MiniMax-M2","object":"chat.completion.chunk"}
+
+data: {"id":"scrubbed","choices":[{"index":0,"delta":{"role":"assistant","name":"MiniMax AI","audio_content":"","content":"","reasoning_details":[{"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","index":0,"text":"uld call get_weather."}]},"finish_reason":null}],"created":1793380000,"model":"MiniMax-M2","object":"chat.completion.chunk"}
+
+data: {"id":"scrubbed","choices":[{"index":0,"delta":{"role":"assistant","name":"MiniMax AI","audio_content":"","content":"","tool_calls":[{"id":"call_function_scrubbed10","type":"function","function":{"name":"get_weather","arguments":"{\"city\": \"Paris\"}"},"index":0}]},"finish_reason":null}],"created":1793380000,"model":"MiniMax-M2","object":"chat.completion.chunk"}
+
+data: {"id":"scrubbed","choices":[{"index":0,"delta":{"role":"assistant","name":"MiniMax AI","audio_content":"","content":""},"finish_reason":"tool_calls"}],"created":1793380000,"model":"MiniMax-M2","object":"chat.completion.chunk","usage":{"total_tokens":330,"prompt_tokens":270,"completion_tokens":60,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens_details":{"reasoning_tokens":20}}}
+
+data: [DONE]
+

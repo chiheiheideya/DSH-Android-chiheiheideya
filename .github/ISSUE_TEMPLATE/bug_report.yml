@@ -1,0 +1,37 @@
+name: 问题反馈 / Bug report
+description: 用着出了问题 / Something does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢反馈！先在 DSH 里打开 **设置 → 关于 → 复制诊断信息**，点「复制」，把内容贴到下面。报告里没有 API Key、登录凭据、对话和屏幕内容，IP 和邮箱也已隐藏；贴之前可以先看一遍。
+
+        Thanks! In DSH open **Settings → About → Copy diagnostics**, tap Copy and paste it below. It contains no API keys, sign-in credentials, conversations or screen content; IPs and emails are hidden. Feel free to read it before pasting.
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么 / What happened
+      description: 你做了什么，期望什么，实际看到什么 / What you did, what you expected, what you saw
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 怎么复现 / Steps to reproduce
+      placeholder: |
+        1.
+        2.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断信息 / Diagnostics
+      description: 设置 → 关于 → 复制诊断信息 / Settings → About → Copy diagnostics
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图或其他 / Screenshots or anything else
+      description: 截图前请遮住个人信息 / Hide personal information in screenshots

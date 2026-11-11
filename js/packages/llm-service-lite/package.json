@@ -1,0 +1,51 @@
+{
+  "name": "@snnh/dsh-llm-service-lite",
+  "version": "0.2.1",
+  "description": "Community plugin for DeepSeek Harness: a lighter LLM service with self-contained provider profiles, a declared model catalog, and the chat-completions, Anthropic Messages, and OpenAI Responses wires on the harness LLM seam.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "locale/en.json",
+    "locale/zh.json",
+    "LICENSE",
+    "package.json"
+  ],
+  "license": "MIT",
+  "author": "snnh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snnh/dsh-llm-service-lite.git"
+  },
+  "homepage": "https://github.com/snnh/dsh-llm-service-lite#readme",
+  "//vendored": "Vendored verbatim from npm @snnh/dsh-llm-service-lite@0.2.1 (gitHead 691f125641e1732417ef344ed640b6dae41d90df, tarball sha512-G+1/u+pb3k4HP0RjlCAG+L9hK2h8Us9n5QfmvGZKpL8QDaaoh6GSeqRefOL/nz8NrIuwA5Q+bSM6gJm4fIdClg==). Only lib/index.js (server side), LICENSE and locale are kept; the Web client (lib/client.js), types and the bundle patch are dropped: bundle-android mounts the row itself. Upgrade: replace lib/index.js from a newer tarball and update this note.",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5-alpha.1",
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.6-alpha.1",
+    "@deepseek-ai/dsh-attachment": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-credentials": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-launch-environment": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-llm": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-timeout": "^0.2.1-alpha.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis-plugin-loader": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/cosmokit": "1.8.6",
+    "@deepseek-ai/dsh-util-values": "^0.2.1-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.5",
+    "eventsource-parser": "^3.1.0"
+  }
+}

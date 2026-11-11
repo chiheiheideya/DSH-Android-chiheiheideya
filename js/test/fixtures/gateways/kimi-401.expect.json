@@ -1,0 +1,16 @@
+{
+  "provider": "Moonshot Kimi (api.moonshot.cn/v1)",
+  "source": "from docs: platform.moonshot.cn/docs/api/errors",
+  "model": "kimi-k2-thinking",
+  "http": {
+    "status": 401,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "AUTH",
+      "status": 401
+    }
+  },
+  "body": "kimi-401.json"
+}

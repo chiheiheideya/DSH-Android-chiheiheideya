@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "AuthenticationError",
+    "message": "The API key or AK/SK in the request is missing or invalid. Request id: scrubbed",
+    "param": "",
+    "type": "Unauthorized"
+  }
+}

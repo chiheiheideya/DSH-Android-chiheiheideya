@@ -1,0 +1,8 @@
+{
+  "provider": "DeepSeek official (api.deepseek.com/v1)",
+  "source": "live capture 2026-10-30, invalid key; request id scrubbed",
+  "body": "deepseek-401.json",
+  "model": "deepseek-flash",
+  "http": { "status": 401, "contentType": "application/json" },
+  "expect": { "error": { "code": "AUTH", "status": 401, "messageIncludes": "Authentication Fails" } }
+}

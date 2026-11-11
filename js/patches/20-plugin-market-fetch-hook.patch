@@ -1,0 +1,13 @@
+--- a/@deepseek-ai/dsh-plugin-market/lib/index.js
++++ b/@deepseek-ai/dsh-plugin-market/lib/index.js
+@@ -555,7 +555,9 @@
+ 			}, { cause });
+ 			let response;
+ 			try {
+-				response = await fetch(url, {
++				// DSH-Android (js patch 20): `PluginMarket.fetchResponse`, when set, replaces the global fetch
++				// for index documents; the app tries equivalent mirrors of a GitHub-hosted index through it.
++				response = await (PluginMarket.fetchResponse ?? fetch)(url, {
+ 					signal,
+ 					redirect: "error",
+ 					headers: { accept: "application/json" }

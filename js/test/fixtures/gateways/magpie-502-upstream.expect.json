@@ -1,0 +1,17 @@
+{
+  "provider": "magpie-style local gateway (127.0.0.1:3425/v1, translating an Anthropic upstream)",
+  "source": "from docs (synthetic): gateway relaying an upstream connection failure as 502",
+  "model": "claude-sonnet-4-5",
+  "http": {
+    "status": 502,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "TRANSPORT",
+      "status": 502,
+      "messageIncludes": "upstream request failed"
+    }
+  },
+  "body": "magpie-502-upstream.json"
+}

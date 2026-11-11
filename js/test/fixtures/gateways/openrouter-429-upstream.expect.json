@@ -1,0 +1,16 @@
+{
+  "provider": "OpenRouter (openrouter.ai/api/v1)",
+  "source": "from docs: openrouter.ai/docs/api-reference/errors ({\"error\":{\"code\": <int>, \"message\", \"metadata\"?}})",
+  "model": "deepseek/deepseek-r1-0528",
+  "http": {
+    "status": 429,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "RATE_LIMIT",
+      "status": 429
+    }
+  },
+  "body": "openrouter-429-upstream.json"
+}

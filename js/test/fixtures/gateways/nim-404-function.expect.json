@@ -1,0 +1,17 @@
+{
+  "provider": "NVIDIA NIM (integrate.api.nvidia.com/v1)",
+  "source": "from docs: NVIDIA API catalog problem+json errors ({\"status\",\"title\",\"detail\"})",
+  "model": "nvidia/does-not-exist",
+  "http": {
+    "status": 404,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 404,
+      "messageIncludes": "Not found for account"
+    }
+  },
+  "body": "nim-404-function.json"
+}

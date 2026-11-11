@@ -1,0 +1,22 @@
+{
+  "provider": "generic OpenAI-compatible gateway quirk",
+  "source": "from docs: id and full name repeated on every fragment (seen on some gateway / proxy builds)",
+  "model": "some-gateway-model",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "call_n1"
+      }
+    ],
+    "finish": "tool-calls"
+  },
+  "body": "quirk-name-every-frame.sse"
+}

@@ -1,0 +1,17 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/guides/error-codes",
+  "model": "gpt-4.1",
+  "http": {
+    "status": 401,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "AUTH",
+      "status": 401,
+      "messageIncludes": "Incorrect API key"
+    }
+  },
+  "body": "openai-401.json"
+}

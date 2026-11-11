@@ -1,0 +1,17 @@
+{
+  "provider": "Zhipu GLM (open.bigmodel.cn/api/paas/v4)",
+  "source": "from docs: docs.bigmodel.cn (finish_reason \"network_error\": inference failed)",
+  "model": "glm-4.6",
+  "basePath": "/api/paas/v4",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "error": {
+      "code": "SERVER",
+      "messageIncludes": "network_error"
+    }
+  },
+  "body": "glm-network-error.sse"
+}

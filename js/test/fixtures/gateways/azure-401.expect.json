@@ -1,0 +1,17 @@
+{
+  "provider": "Azure OpenAI (<resource>.openai.azure.com/openai/v1)",
+  "source": "from docs: learn.microsoft.com/azure/ai-foundry/openai/reference (error envelope with innererror)",
+  "model": "gpt-4o",
+  "http": {
+    "status": 401,
+    "contentType": "application/json"
+  },
+  "basePath": "/openai/v1",
+  "expect": {
+    "error": {
+      "code": "AUTH",
+      "status": 401
+    }
+  },
+  "body": "azure-401.json"
+}

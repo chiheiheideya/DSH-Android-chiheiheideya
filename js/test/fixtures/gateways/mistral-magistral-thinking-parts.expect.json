@@ -1,0 +1,51 @@
+{
+  "provider": "Mistral (api.mistral.ai/v1)",
+  "source": "from docs: docs.mistral.ai/capabilities/reasoning (thinking chunks inside array content: {\"type\":\"thinking\",\"thinking\":[{\"type\":\"text\",…}]}; passed back the same way)",
+  "model": "magistral-medium-latest",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "D681PevKs"
+      }
+    ],
+    "usage": {
+      "inputTokens": 180,
+      "outputTokens": 60,
+      "totalTokens": 240,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "content"
+    ]
+  },
+  "echo": {
+    "content": [
+      {
+        "type": "thinking",
+        "thinking": [
+          {
+            "type": "text",
+            "text": "The user wants the weather in Paris. I should call get_weather."
+          }
+        ]
+      }
+    ],
+    "absent": [
+      "reasoning_content",
+      "reasoning"
+    ]
+  },
+  "body": "mistral-magistral-thinking-parts.sse"
+}

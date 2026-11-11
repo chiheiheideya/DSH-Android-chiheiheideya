@@ -1,0 +1,28 @@
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"reasoning_content":"The user want"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"reasoning_content":"s the weather"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"reasoning_content":" in Paris. I "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"reasoning_content":"should call g"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"reasoning_content":"et_weather."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"functions.get_weather:0","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"ci"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ty\":"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":" \"Pa"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ris\""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"kimi-k2-thinking","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls","usage":{"prompt_tokens":400,"completion_tokens":80,"total_tokens":480,"cached_tokens":256}}]}
+
+data: [DONE]
+

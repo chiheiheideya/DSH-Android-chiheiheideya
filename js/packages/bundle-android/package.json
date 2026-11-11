@@ -1,0 +1,36 @@
+{
+  "name": "@dsh-android/bundle-android",
+  "version": "0.1.0",
+  "description": "DSH-Android profile bundle and engine entry (main.mjs): layered over dsh-base + dsh-sdk-app; trims desktop/web/experimental rows, runs approval-only without an OS sandbox, mounts the device, guard, mode, account and extensions plugins, dsh's plugin manager and market, and the dormant llm-service-lite row for third-party models.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "cordis.patch.yml",
+    "package.json",
+    "android-env.cjs",
+    "main.mjs"
+  ],
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./main.mjs": "./main.mjs",
+    "./android-env.cjs": "./android-env.cjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "dsh": "0.2.1-rc.5"
+  },
+  "dependencies": {
+    "@dsh-android/plugin-account": "0.1.0",
+    "@dsh-android/plugin-device": "0.1.0",
+    "@dsh-android/plugin-extensions": "0.1.0",
+    "@dsh-android/plugin-guard": "0.1.0",
+    "@dsh-android/plugin-mode": "0.1.0",
+    "@snnh/dsh-llm-service-lite": "0.2.1"
+  }
+}

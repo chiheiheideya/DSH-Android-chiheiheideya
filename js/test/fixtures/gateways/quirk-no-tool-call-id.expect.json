@@ -1,0 +1,21 @@
+{
+  "provider": "generic OpenAI-compatible gateway quirk",
+  "source": "from docs: tool call without any id (some llama.cpp / proxy builds); the adapter synthesizes one",
+  "model": "some-gateway-model",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "finish": "tool-calls"
+  },
+  "body": "quirk-no-tool-call-id.sse"
+}

@@ -1,0 +1,37 @@
+{
+  "provider": "magpie-style local gateway (127.0.0.1:3425/v1, translating an Anthropic upstream)",
+  "source": "from docs (synthetic): modeled on protocol-translating gateways such as yetone/magpie (Anthropic thinking → reasoning_content, tool_use → tool_calls, CRLF framing, stream closed after the usage chunk without [DONE]); not verified against magpie output",
+  "model": "claude-sonnet-4-5",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "Checking.",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "toolu_scrubbed13"
+      }
+    ],
+    "usage": {
+      "inputTokens": 100,
+      "outputTokens": 90,
+      "totalTokens": 590,
+      "cacheReadTokens": 400,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_content"
+    ]
+  },
+  "echo": {
+    "reasoning_content": "The user wants the weather in Paris. I should call get_weather."
+  },
+  "body": "magpie-anthropic-upstream-no-done.sse"
+}

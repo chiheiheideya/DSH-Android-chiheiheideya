@@ -1,0 +1,37 @@
+{
+  "provider": "SiliconFlow (api.siliconflow.cn/v1)",
+  "source": "from docs: docs.siliconflow.cn chat-completions stream (cumulative usage on every chunk, null content/reasoning_content placeholders, id repeated and name \"\" on continuation fragments, empty system_fingerprint)",
+  "model": "deepseek-ai/DeepSeek-R1",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "0198scrubbedcall"
+      }
+    ],
+    "usage": {
+      "inputTokens": 100,
+      "outputTokens": 11,
+      "totalTokens": 111,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_content"
+    ]
+  },
+  "echo": {
+    "reasoning_content": "The user wants the weather in Paris. I should call get_weather."
+  },
+  "body": "siliconflow-reasoning-tools.sse"
+}

@@ -1,0 +1,29 @@
+{
+  "provider": "generic OpenAI-compatible gateway quirk",
+  "source": "from docs: parallel calls all sent with index 0 and distinct ids (reported for several OpenAI-compatible gateways in client issue trackers)",
+  "model": "some-gateway-model",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "call_p1"
+      },
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Tokyo"
+        },
+        "id": "call_p2"
+      }
+    ],
+    "finish": "tool-calls"
+  },
+  "body": "quirk-index-reused-parallel.sse"
+}

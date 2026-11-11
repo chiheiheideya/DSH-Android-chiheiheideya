@@ -1,0 +1,17 @@
+{
+  "provider": "SiliconFlow (api.siliconflow.cn/v1)",
+  "source": "from docs: docs.siliconflow.cn error codes (30011: model not available for the account, e.g. Pro models without real-name verification)",
+  "model": "Pro/deepseek-ai/DeepSeek-V3",
+  "http": {
+    "status": 403,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "MODEL_NOT_AVAILABLE",
+      "status": 403,
+      "messageIncludes": "The model is not available for your account."
+    }
+  },
+  "body": "siliconflow-403-model-not-available.json"
+}

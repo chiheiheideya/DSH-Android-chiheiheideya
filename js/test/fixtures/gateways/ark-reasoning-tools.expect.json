@@ -1,0 +1,37 @@
+{
+  "provider": "Volcano Engine Ark (ark.cn-beijing.volces.com/api/v3)",
+  "source": "from docs: volcengine.com/docs/82379 (ChatCompletions streaming: reasoning_content, finish_reason absent until the end, include_usage chunk)",
+  "model": "doubao-seed-1-6-250615",
+  "basePath": "/api/v3",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "usage": {
+      "inputTokens": 300,
+      "outputTokens": 66,
+      "totalTokens": 366,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_content"
+    ]
+  },
+  "echo": {
+    "reasoning_content": "The user wants the weather in Paris. I should call get_weather."
+  },
+  "body": "ark-reasoning-tools.sse"
+}

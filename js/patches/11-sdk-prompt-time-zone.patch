@@ -1,0 +1,35 @@
+--- a/@deepseek-ai/dsh-sdk-jsonrpc-server/lib/index.js
++++ b/@deepseek-ai/dsh-sdk-jsonrpc-server/lib/index.js
+@@ -191,9 +191,13 @@
+ 		this.assertLiveAgent(rec, params.sessionId);
+ 		const content = await durablePromptContent(this.ctx, params.contentBlocks);
+ 		this.assertLiveAgent(rec, params.sessionId);
++		// DSH-Android: dsh-time-context reads the user's zone from a user-rpc source (the Web
++		// host's clientTimeZone); SDK prompts carry none, so the model was told to ask the user
++		// for the zone. Stamp the phone's zone: the `clientTimeZone` param, else the process TZ.
++		const clientTimeZone = promptTimeZone(params.clientTimeZone);
+ 		const message = createUserMessage({
+ 			content,
+-			source: { kind: "user" }
++			source: clientTimeZone === void 0 ? { kind: "user" } : { kind: "user", rpcId: randomUUID(), clientTimeZone }
+ 		});
+ 		rec.handle.agent.followup(message);
+ 		return { messageId: message.id };
+@@ -456,6 +460,17 @@
+ 	}
+ };
+ //#endregion
++/** DSH-Android: a canonical IANA zone for prompt sources, or undefined (dsh-time-context rejects others). */
++function promptTimeZone(value) {
++	const zone = typeof value === "string" && value !== "" ? value : process.env.TZ;
++	if (typeof zone !== "string" || zone === "") return void 0;
++	try {
++		const canonical = new Intl.DateTimeFormat("en-US", { timeZone: zone }).resolvedOptions().timeZone;
++		return canonical === "UTC" || /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/.test(canonical) ? canonical : void 0;
++	} catch {
++		return void 0;
++	}
++}
+ //#region lib/types/index.js
+ /**
+ * SDK-facing JSON-RPC plugin over stdio. The selected dsh profile decides

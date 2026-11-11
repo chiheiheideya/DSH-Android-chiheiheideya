@@ -1,0 +1,36 @@
+{
+  "provider": "NVIDIA NIM (integrate.api.nvidia.com/v1)",
+  "source": "from docs: build.nvidia.com model cards (OpenAI-compatible streaming, reasoning_content for reasoning models, whole tool call in one fragment)",
+  "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "usage": {
+      "inputTokens": 200,
+      "outputTokens": 60,
+      "totalTokens": 260,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_content"
+    ]
+  },
+  "echo": {
+    "reasoning_content": "The user wants the weather in Paris. I should call get_weather."
+  },
+  "body": "nim-reasoning-tools.sse"
+}

@@ -1,0 +1,689 @@
+DSH-Android patch 17: llm-service-lite (vendored @snnh/dsh-llm-service-lite 0.2.1), chat-completions
+thinking echo-back and gateway compatibility. Applies on top of patches 14 and 16.
+
+Thinking echo-back. The chat wire read thinking only from `delta.reasoning_content` and sent it back
+only as `reasoning_content`, only when the model id matched a catalog family declaring replay. Now:
+ - thinking is read from `reasoning_content`, `reasoning`, `reasoning_details` (merged by index,
+   signatures / encrypted items kept) and thinking parts of an array `content`; per-call
+   `extra_content` (Gemini thought signatures) is kept too;
+ - the finish chunk records, as adapter-private replay state on the assistant message
+   (`source.replayState.response`, kind `llm-service-lite-chat` v1, no per-block entries), which
+   fields / shape the thinking arrived in and the endpoint (base URL origin + path) it came from;
+ - the request path writes it back in that same field / shape, only to the same provider route and
+   base URL: always on assistant turns with tool calls, on other turns only when the model's family
+   or capabilities declare replay; never with `replayReasoning: false`; `reasoning_details` and
+   `extra_content` only to the same model. History without a record keeps the upstream rule.
+ - an HTTP 400 naming an echoed field is retried once without echo; the base URL is remembered.
+
+Gateway compatibility (found by js/test/gateway-replay.test.mjs):
+ - a JSON (non-streaming) completion body is translated instead of reading as a cut-off stream;
+ - any finish_reason ends the turn (`tool_use`, `max_tokens`, `sensitive`, `eos`...); `stop` with
+   tool calls is `tool-calls`; `error` / `network_error` is a SERVER failure;
+ - tool calls: matched by id, then index; index-less calls (Gemini), index 0 reused for parallel
+   calls, names repeated per frame, ids that never arrive (synthesized), "" arguments ("{}");
+ - usage inside the final choice (Moonshot); cache hits as `prompt_cache_hit_tokens` (DeepSeek) or
+   `cached_tokens` (Moonshot);
+ - CJK exhausted-balance wording (欠费 / 余额不足 / AccountOverdue) is QUOTA, not RATE_LIMIT.
+
+--- a/@snnh/dsh-llm-service-lite/lib/index.js
++++ b/@snnh/dsh-llm-service-lite/lib/index.js
+@@ -1536,6 +1536,8 @@
+ 		reasoningContent: capabilities.reasoningContent ?? family.reasoningContent,
+ 		replayReasoning,
+ 		replayRequired: family.replayRequired,
++		// DSH-Android (patch 17): an explicit `replayReasoning: false` also stops thinking echo-back.
++		replayDeclared: capabilities.replayReasoning,
+ 		encryptedReplay: capabilities.responsesEncryptedReplay ?? false,
+ 		systemPromptUpdate: capabilities.systemPromptUpdate,
+ 		toolUpdate: capabilities.toolUpdate,
+@@ -2638,6 +2640,12 @@
+ /** Anthropic spells an exhausted account balance this way; the shared quota patterns do not. */
+ const PROVIDER_QUOTA_EXHAUSTED = /credit balance is too low/iu;
+ /**
++* DSH-Android (patch 17): exhausted-balance wordings the shared patterns miss: Zhipu 1113 欠费,
++* SiliconFlow 余额不足 / "balance is insufficient", Volcano Ark `AccountOverdueError`, DashScope `Arrearage`, Moonshot
++* `exceeded_current_quota_error` (the shared `\bquota\b` does not match inside an identifier).
++*/
++const PROVIDER_QUOTA_EXHAUSTED_EXTRA = /欠费|余额不足|额度不足|额度已用(?:完|尽)|AccountOverdue|Arrearage|exceeded_current_quota|balance (?:is )?insufficient/iu;
++/**
+ * Joined provider error code, type, and message text used by the classifiers.
+ * @param raw - the provider's error body or error object, as received.
+ * @returns the distinct non-empty text parts, joined by one space.
+@@ -2649,7 +2657,11 @@
+ 		error.code,
+ 		error.type,
+ 		error.message,
+-		envelope.message
++		envelope.message,
++		// DSH-Android (patch 17): `{"error": "text"}` (LM Studio, Ollama), `{"detail": …, "title": …}` (FastAPI, NVIDIA NIM).
++		envelope.error,
++		envelope.detail,
++		envelope.title
+ 	].filter((value) => typeof value === "string" && value.length > 0);
+ 	return [...new Set(parts)].join(" ");
+ }
+@@ -2664,6 +2676,8 @@
+ 	const error = typeof envelope.error === "object" && envelope.error !== null ? envelope.error : envelope;
+ 	if (typeof error.message === "string" && error.message.length > 0) return error.message;
+ 	if (typeof envelope.message === "string" && envelope.message.length > 0) return envelope.message;
++	// DSH-Android (patch 17): `{"error": "text"}` (LM Studio, Ollama), `{"detail": …}` / `{"title": …}` (FastAPI, NVIDIA NIM).
++	for (const field of ["error", "detail", "title"]) if (typeof envelope[field] === "string" && envelope[field].length > 0) return envelope[field];
+ 	return `llm-service-lite: provider request failed (${status === void 0 ? "stream error" : status})`;
+ }
+ /**
+@@ -2706,8 +2720,10 @@
+ 	const detail = errorDetail(raw);
+ 	const message = errorMessage(raw, status);
+ 	const facts = providerFacts(status, headers);
+-	if (status === 401 || status === 403) return new LlmError(message, "AUTH", facts);
+-	if (isQuotaExceededError(detail) || PROVIDER_QUOTA_EXHAUSTED.test(detail) || status === 402) return new LlmError(message, "QUOTA", facts);
++	// DSH-Android (patch 17): a 403 that says the balance is exhausted (SiliconFlow, Ark, DashScope) is QUOTA, not AUTH.
++	const exhausted = isQuotaExceededError(detail) || PROVIDER_QUOTA_EXHAUSTED.test(detail) || PROVIDER_QUOTA_EXHAUSTED_EXTRA.test(detail);
++	if (status === 401 || status === 403 && !exhausted) return new LlmError(message, "AUTH", facts);
++	if (exhausted || status === 402) return new LlmError(message, "QUOTA", facts);
+ 	if (isContextWindowExceededError(detail) || PROVIDER_CONTEXT_OVERFLOW.test(detail)) return new LlmError(message, "CONTEXT_WINDOW_EXCEEDED", facts);
+ 	if (status === 408 || status === 502 || status === 504) return new LlmError(message, "TRANSPORT", facts);
+ 	if (status === 429) return new LlmError(message, "RATE_LIMIT", facts);
+@@ -3300,6 +3316,184 @@
+ 	return { thinking: { type: thinking ? "enabled" : "disabled" } };
+ }
+ /**
++* DSH-Android (patch 17): thinking echo-back for OpenAI-compatible endpoints.
++*
++* Chat-completions has no standard field for a model's thinking, and the endpoints that return
++* one disagree on its spelling and on the rule for sending it back:
++*   - `reasoning_content`: DeepSeek, Moonshot Kimi, Zhipu GLM, Qwen / DashScope, SiliconFlow,
++*     Volcano Ark, MiMo, LM Studio, sglang and older vLLM reasoning parsers;
++*   - `reasoning`: OpenRouter, current vLLM, Ollama `/v1`, StepFun, Groq;
++*   - `reasoning_details`, typed items that may carry a signature or encrypted data: OpenRouter,
++*     MiniMax (`reasoning_split`);
++*   - thinking parts inside an array `content`: Mistral Magistral;
++*   - per-call `extra_content` (Gemini's OpenAI-compatible `thought_signature`).
++* Some reject a follow-up whose assistant tool-call turn lost its thinking (DeepSeek thinking
++* mode, Kimi thinking, MiMo, signed OpenRouter reasoning); some reject a field they never emit.
++* The translator therefore records on the assistant message's adapter-private replay state which
++* fields / shape the thinking arrived in and from which endpoint (base URL), and the request path
++* writes it back in exactly that shape, only on the same provider route and base URL:
++*   - assistant turns carrying tool calls: always (the endpoint emitted that field);
++*   - other assistant turns: only when the model's family or capabilities declare replay (the
++*     upstream rule; DeepSeek documents earlier turns' thinking as ignored);
++*   - never when the model declares `replayReasoning: false`, never to another route or base URL,
++*     and `reasoning_details` / `extra_content` (signed, model-bound) only to the same model.
++* An endpoint that answers an echoed field with HTTP 400 naming it gets the request once more
++* without echo, and is remembered for the life of the process. History recorded before this
++* patch (no record) keeps the upstream rule: `reasoning_content` when the family declares replay.
++*/
++const CHAT_REPLAY_KIND = "llm-service-lite-chat";
++/** Where thinking may arrive, in display priority (the first one seen wins the text). */
++const REASONING_SOURCES = [
++	"reasoning_content",
++	"reasoning",
++	"reasoning_details",
++	"content"
++];
++/** Content-part types that carry thinking rather than answer text. */
++const THINKING_PART_TYPES = ["thinking", "reasoning"];
++/** Base URLs that rejected an echoed thinking field this process (HTTP 400 naming it). */
++const echoRefused = /* @__PURE__ */ new Set();
++/** A JSON object, or nothing. */
++function isObject(value) {
++	return typeof value === "object" && value !== null && !Array.isArray(value);
++}
++/** One base URL as an endpoint identity: lowercased origin + path, no query, credentials, or trailing slash. */
++function endpointKey(baseURL) {
++	const url = typeof baseURL === "string" ? URL.parse(baseURL) : null;
++	if (url === null) return String(baseURL ?? "");
++	return `${url.origin.toLowerCase()}${url.pathname.replace(/\/+$/u, "")}`;
++}
++/** Text of one thinking content part: `thinking` / `reasoning` / `text`, as a string or as text parts. */
++function thinkingPartText(part) {
++	const body = part.thinking ?? part.reasoning ?? part.text;
++	if (typeof body === "string") return body;
++	if (!Array.isArray(body)) return "";
++	return body.map((item) => typeof item === "string" ? item : isObject(item) && typeof item.text === "string" ? item.text : "").join("");
++}
++/** The shape one thinking content part was sent in, so it can be rebuilt. */
++function thinkingPartShape(part) {
++	const key = part.thinking !== void 0 ? "thinking" : part.reasoning !== void 0 ? "reasoning" : "text";
++	return {
++		type: part.type,
++		key,
++		nested: Array.isArray(part[key])
++	};
++}
++/** A thinking content part in a recorded shape. */
++function thinkingPartOf(shape, text) {
++	return {
++		type: shape.type,
++		[shape.key]: shape.nested ? [{
++			type: "text",
++			text
++		}] : text
++	};
++}
++/** Display text of one `reasoning_details` item (encrypted items have none). */
++function detailText(item) {
++	if (typeof item.text === "string") return item.text;
++	if (typeof item.summary === "string") return item.summary;
++	return "";
++}
++/**
++* Answer text and thinking one delta (or one whole message) carries, in every dialect.
++* @returns `text`, `reasoning` (source → text, only sources present), `details`, `part` shape.
++*/
++function deltaParts(delta) {
++	let text = typeof delta.content === "string" ? delta.content : "";
++	const reasoning = {};
++	let part;
++	if (Array.isArray(delta.content)) for (const item of delta.content) {
++		if (typeof item === "string") {
++			text += item;
++			continue;
++		}
++		if (!isObject(item)) continue;
++		if (THINKING_PART_TYPES.includes(item.type)) {
++			reasoning.content = (reasoning.content ?? "") + thinkingPartText(item);
++			part ??= thinkingPartShape(item);
++		} else if (typeof item.text === "string" && (item.type === "text" || item.type === void 0)) text += item.text;
++	}
++	for (const field of ["reasoning_content", "reasoning"]) if (typeof delta[field] === "string" && delta[field].length > 0) reasoning[field] = delta[field];
++	const details = Array.isArray(delta.reasoning_details) ? delta.reasoning_details.filter(isObject) : [];
++	if (details.length > 0) reasoning.reasoning_details = details.map(detailText).join("");
++	return {
++		text,
++		reasoning,
++		details,
++		part
++	};
++}
++/**
++* Merge streamed `reasoning_details` fragments: items with the same `index` are one item whose
++* `text` / `summary` / `data` arrive in pieces and whose other fields (signature, format, id)
++* arrive once, possibly late; items without an index are whole.
++*/
++function mergeDetails(merged, byIndex, fragments) {
++	for (const fragment of fragments) {
++		const numbered = typeof fragment.index === "number";
++		let target = numbered ? byIndex.get(fragment.index) : void 0;
++		if (target === void 0) {
++			target = {};
++			merged.push(target);
++			if (numbered) byIndex.set(fragment.index, target);
++		}
++		for (const [key, value] of Object.entries(fragment)) {
++			if (value === null || value === void 0) continue;
++			if ((key === "text" || key === "summary" || key === "data") && typeof value === "string" && typeof target[key] === "string") target[key] += value;
++			else target[key] = value;
++		}
++	}
++}
++/**
++* This adapter's chat replay record on one assistant message, judged for one request.
++* @returns `none` (no record: history from before patch 17 or another adapter), `foreign`
++*   (recorded against another base URL or protocol), or `match` with the record.
++*/
++function chatReplayOf(source, endpoint) {
++	const envelope = source.replayState;
++	if (envelope === void 0) return { status: "none" };
++	const response = isObject(envelope) && isObject(envelope.response) ? envelope.response : void 0;
++	if (response === void 0 || response.kind !== CHAT_REPLAY_KIND || response.version !== 1 || response.endpoint !== endpoint) return { status: "foreign" };
++	return {
++		status: "match",
++		record: response
++	};
++}
++/** Whether an HTTP 400 body names one of the echoed fields (`reasoning`, not `reasoning_effort`). */
++function namesEchoedField(text, echoed) {
++	return echoed.some((field) => new RegExp(`(?<![A-Za-z_])${field}(?![A-Za-z_])`, "u").test(text));
++}
++/**
++* A non-streaming chat completion (an endpoint or proxy that ignores `stream: true`) as the one
++* stream frame it is equivalent to: each `message` becomes its choice's `delta`, and tool calls
++* get the positional `index` the stream protocol would have carried.
++*/
++function completionAsChunk(raw) {
++	if (!Array.isArray(raw.choices)) return raw;
++	return {
++		...raw,
++		choices: raw.choices.map((choice) => {
++			if (!isObject(choice) || !isObject(choice.message)) return choice;
++			const { message, ...rest } = choice;
++			const calls = Array.isArray(message.tool_calls) ? message.tool_calls.map((call, position) => isObject(call) && typeof call.index !== "number" ? {
++				...call,
++				index: position
++			} : call) : message.tool_calls;
++			return {
++				...rest,
++				delta: {
++					...message,
++					...calls === void 0 ? {} : { tool_calls: calls }
++				}
++			};
++		})
++	};
++}
++async function* oneEvent(raw) {
++	yield raw;
++}
++/**
+ * Replay rules for tool calls, mirroring OWC's pairing repair.
+ *
+ * A chat-completions endpoint rejects a request whose `tool_calls` have no
+@@ -3363,9 +3557,13 @@
+ * @param options - the assembled request.
+ * @param model - the route's declared facts for this model.
+ * @param versions - prepared request images, keyed by durable attachment id.
++* @param echo - DSH-Android (patch 17): `endpoint` of this request; `echoed` collects the thinking fields written.
+ * @returns protocol messages in conversation order.
+ */
+-function toWireMessages(options, model, versions) {
++function toWireMessages(options, model, versions, echo = {
++	endpoint: "",
++	echoed: /* @__PURE__ */ new Set()
++}) {
+ 	const messages = options.messages;
+ 	const { results } = toolPairings(messages);
+ 	const emittedCalls = /* @__PURE__ */ new Set();
+@@ -3419,23 +3617,49 @@
+ 				declared.add(id);
+ 				return [block];
+ 			});
+-			const replay = replaysReasoning(model) && message.source.provider === options.provider;
+ 			const reasoning = message.content.flatMap((block) => block.type === "reasoning" ? [block.text] : []).join("\n");
+ 			const text = textOf$1(message);
++			// DSH-Android (patch 17): echo the thinking back in the field / shape it arrived in.
++			const source = message.source;
++			const sameRoute = source.provider === options.provider;
++			const sameModel = sameRoute && source.model === options.model;
++			const replayed = sameRoute ? chatReplayOf(source, echo.endpoint) : { status: "foreign" };
++			const refused = model.replayDeclared === false || echoRefused.has(echo.endpoint) && !model.replayRequired;
++			const record = replayed.status === "match" ? replayed.record : void 0;
++			let fields = [];
++			if (sameRoute && !refused && reasoning.length > 0) {
++				if (record !== void 0) fields = calls.length > 0 || replaysReasoning(model) ? record.reasoning?.fields ?? [] : [];
++				else if (replayed.status === "none" && replaysReasoning(model)) fields = ["reasoning_content"];
++			}
++			if (!sameModel) fields = fields.filter((field) => field !== "reasoning_details");
++			const replay = fields.length > 0;
++			const extras = sameModel && !refused && isObject(record?.calls) ? record.calls : {};
+ 			if (text.length === 0 && calls.length === 0 && !(replay && reasoning.length > 0)) break;
++			const part = fields.includes("content") && isObject(record?.reasoning?.part) ? record.reasoning.part : void 0;
+ 			const wire = {
+ 				role: "assistant",
+-				content: text.length > 0 ? text : calls.length > 0 ? null : "",
++				content: part !== void 0 ? [thinkingPartOf(part, reasoning), ...text.length > 0 ? [{
++					type: "text",
++					text
++				}] : []] : text.length > 0 ? text : calls.length > 0 ? null : "",
+ 				...calls.length === 0 ? {} : { tool_calls: calls.map((block) => ({
+ 					id: String(block.id),
+ 					type: "function",
+ 					function: {
+ 						name: block.name,
+ 						arguments: block.arguments
+-					}
+-				})) },
+-				...replay && reasoning.length > 0 ? { reasoning_content: reasoning } : {}
++					},
++					...isObject(extras[String(block.id)]) ? { extra_content: extras[String(block.id)] } : {}
++				})) }
+ 			};
++			for (const field of fields) {
++				if (field === "reasoning_content" || field === "reasoning") wire[field] = reasoning;
++				else if (field === "reasoning_details" && Array.isArray(record?.reasoning?.details)) wire.reasoning_details = record.reasoning.details;
++				else continue;
++				echo.echoed.add(field);
++			}
++			if (part !== void 0) echo.echoed.add(part.type);
++			if (calls.some((block) => isObject(extras[String(block.id)]))) echo.echoed.add("extra_content");
+ 			out.push(wire);
+ 			const media = [];
+ 			for (const call of calls) {
+@@ -3467,7 +3691,11 @@
+ */
+ function chatRequest(profile, model, options, apiKey, versions = /* @__PURE__ */ new Map()) {
+ 	const level = reasoningLevelOf(model, reasoningLevelFor(model, options.reasoningEffort));
+-	const messages = toWireMessages(options, model, versions);
++	const echo = {
++		endpoint: endpointKey(profile.baseURL),
++		echoed: /* @__PURE__ */ new Set()
++	};
++	const messages = toWireMessages(options, model, versions, echo);
+ 	const temperature = options.temperature ?? model.defaults.temperature;
+ 	const body = {
+ 		...profile.extraBody,
+@@ -3500,7 +3728,8 @@
+ 			...profile.headers,
+ 			...apiKey === void 0 || apiKey.length === 0 ? {} : { authorization: `Bearer ${apiKey}` }
+ 		},
+-		body: JSON.stringify(body)
++		body: JSON.stringify(body),
++		echoed: [...echo.echoed]
+ 	};
+ }
+ /**
+@@ -3512,12 +3741,19 @@
+ * a completed message.
+ */
+ function finishReasonOf$1(reason, sawDone, sawOutput, hasToolCalls) {
+-	if (reason === "tool_calls" || reason === "function_call") return { kind: "tool-calls" };
+-	if (reason === "length") return { kind: "max-tokens" };
+-	if (reason === "content_filter") return { kind: "stop" };
+-	if (reason === "stop") return { kind: "stop" };
++	// DSH-Android (patch 17): any finish reason ends the turn. Gateways spell the same outcomes
++	// differently (`tool_use`, `max_tokens`, `sensitive`, `eos`, …), and a few report `stop` for a
++	// turn that did call tools (older Ollama); an unknown reason must not read as a cut-off stream.
++	if (typeof reason === "string" && reason.length > 0) {
++		const spelled = reason.toLowerCase();
++		if (spelled === "tool_calls" || spelled === "function_call" || spelled === "tool_use" || spelled === "tool_call") return { kind: "tool-calls" };
++		if (spelled === "length" || spelled === "max_tokens" || spelled === "model_length") return { kind: "max-tokens" };
++		return hasToolCalls ? { kind: "tool-calls" } : { kind: "stop" };
++	}
+ 	if (sawDone && sawOutput) return hasToolCalls ? { kind: "tool-calls" } : { kind: "stop" };
+ }
++/** DSH-Android (patch 17): finish reasons that report a provider-side failure rather than an outcome. */
++const FAILED_FINISH_REASONS = ["error", "network_error"];
+ /** Validated token accounting from one provider usage report. */
+ function usageOf$1(chunk) {
+ 	const usage = chunk.usage;
+@@ -3528,7 +3764,8 @@
+ 	const completion = usage.completion_tokens;
+ 	if (!Number.isSafeInteger(prompt) || prompt < 0 || !Number.isSafeInteger(completion) || completion < 0) throw new LlmError("llm-service-lite: provider returned invalid token usage", "MALFORMED_RESPONSE");
+ 	const details = usage.prompt_tokens_details;
+-	const cached = (typeof details === "object" && details !== null ? details.cached_tokens : void 0) ?? 0;
++	// DSH-Android (patch 17): DeepSeek also spells cache hits `prompt_cache_hit_tokens`, Moonshot `cached_tokens`.
++	const cached = (typeof details === "object" && details !== null ? details.cached_tokens : void 0) ?? usage.prompt_cache_hit_tokens ?? usage.cached_tokens ?? 0;
+ 	if (!Number.isSafeInteger(cached) || cached < 0 || cached > prompt) throw new LlmError("llm-service-lite: provider returned invalid cached token usage", "MALFORMED_RESPONSE");
+ 	return {
+ 		inputTokens: prompt - cached,
+@@ -3543,16 +3780,26 @@
+ *
+ * @param events - decoded JSON events in arrival order.
+ * @param sawDone - reports whether the stream delivered its sentinel.
++* @param context - DSH-Android (patch 17): `endpoint`, the base URL identity recorded for replay.
+ * @returns the chunk stream, ending with exactly one terminal `finish`.
+ * @throws LlmError when the stream carries an in-band provider error, or when it was cut off.
+ */
+-async function* translateChatStream(events, sawDone) {
++async function* translateChatStream(events, sawDone, context) {
+ 	const open = /* @__PURE__ */ new Map();
+-	const tools = /* @__PURE__ */ new Map();
++	// DSH-Android (patch 17): tool calls are slots matched by id first, then by index. Gateways omit
++	// `index` (Gemini), reuse index 0 for parallel calls with distinct ids, repeat the name in every
++	// frame, or never send an id; none of those may lose or merge a call.
++	const tools = [];
+ 	let nextIndex = 0;
+ 	let stopReason;
+ 	let sawOutput = false;
+ 	let pendingUsage;
++	// DSH-Android (patch 17): where the thinking arrived, for the replay record.
++	const seen = /* @__PURE__ */ new Set();
++	let primary;
++	const details = [];
++	const detailsByIndex = /* @__PURE__ */ new Map();
++	let part;
+ 	const startBlock = (kind) => {
+ 		const block = {
+ 			index: nextIndex,
+@@ -3588,6 +3835,28 @@
+ 		}
+ 		return closing;
+ 	};
++	const slotFor = (call) => {
++		const id = typeof call.id === "string" && call.id.length > 0 ? call.id : void 0;
++		const position = typeof call.index === "number" ? call.index : void 0;
++		const named = typeof call.function?.name === "string" && call.function.name.length > 0;
++		if (id !== void 0) {
++			const known = tools.find((slot) => slot.id === id);
++			if (known !== void 0) return known;
++		}
++		const latest = position === void 0 ? tools.at(-1) : tools.findLast((slot) => slot.position === position);
++		// Same index (or none) continues the latest call unless this fragment opens a new one: a new
++		// call names itself (a repeated name is not a new call); an id the slot lacks is its late id.
++		if (latest !== void 0 && (id === void 0 ? !named || latest.name === "" || call.function.name.startsWith(latest.name) : latest.id === "" || !named)) return latest;
++		const slot = {
++			id: "",
++			name: "",
++			arguments: "",
++			index: -1,
++			position
++		};
++		tools.push(slot);
++		return slot;
++	};
+ 	for await (const raw of events) {
+ 		if (raw.error !== void 0 && raw.error !== null) throw classifyFailure(raw, void 0);
+ 		const chunk = raw;
+@@ -3595,7 +3864,10 @@
+ 		if (usage !== void 0) pendingUsage = usage;
+ 		for (const choice of Array.isArray(chunk.choices) ? chunk.choices : []) {
+ 			if (typeof choice !== "object" || choice === null) continue;
+-			if (typeof choice.finish_reason === "string") stopReason = choice.finish_reason;
++			// DSH-Android (patch 17): Moonshot reports usage inside the final choice.
++			const choiceUsage = usageOf$1(choice);
++			if (choiceUsage !== void 0) pendingUsage = choiceUsage;
++			if (typeof choice.finish_reason === "string" && choice.finish_reason.length > 0) stopReason = choice.finish_reason;
+ 			for (const url of imageUrls(choice)) {
+ 				for (const end of endOpenBlocks()) yield end;
+ 				const index = nextIndex;
+@@ -3615,52 +3887,57 @@
+ 			}
+ 			const delta = choice.delta;
+ 			if (typeof delta !== "object" || delta === null) continue;
+-			if (typeof delta.content === "string" && delta.content.length > 0) {
++			const parts = deltaParts(delta);
++			for (const source of REASONING_SOURCES) if (parts.reasoning[source] !== void 0) seen.add(source);
++			if (parts.details.length > 0) mergeDetails(details, detailsByIndex, parts.details);
++			part ??= parts.part;
++			const shownFrom = [primary, ...REASONING_SOURCES].find((source) => source !== void 0 && (parts.reasoning[source] ?? "").length > 0);
++			const thinking = shownFrom === void 0 ? "" : parts.reasoning[shownFrom];
++			if (shownFrom !== void 0) primary ??= shownFrom;
++			if (thinking.length > 0) {
+ 				sawOutput = true;
+-				if (!open.has("text")) for (const end of endOpenBlocks()) yield end;
+-				const block = open.get("text") ?? startBlock("text");
++				if (!open.has("reasoning")) for (const end of endOpenBlocks()) yield end;
++				const block = open.get("reasoning") ?? startBlock("reasoning");
+ 				if (block.text.length === 0) yield {
+ 					type: "block-start",
+ 					index: block.index,
+-					blockType: "text"
++					blockType: "reasoning"
+ 				};
+-				block.text += delta.content;
++				block.text += thinking;
+ 				yield {
+-					type: "text-delta",
++					type: "reasoning-delta",
+ 					index: block.index,
+-					text: delta.content
++					text: thinking
+ 				};
+ 			}
+-			if (typeof delta.reasoning_content === "string" && delta.reasoning_content.length > 0) {
++			if (parts.text.length > 0) {
+ 				sawOutput = true;
+-				if (!open.has("reasoning")) for (const end of endOpenBlocks()) yield end;
+-				const block = open.get("reasoning") ?? startBlock("reasoning");
++				if (!open.has("text")) for (const end of endOpenBlocks()) yield end;
++				const block = open.get("text") ?? startBlock("text");
+ 				if (block.text.length === 0) yield {
+ 					type: "block-start",
+ 					index: block.index,
+-					blockType: "reasoning"
++					blockType: "text"
+ 				};
+-				block.text += delta.reasoning_content;
++				block.text += parts.text;
+ 				yield {
+-					type: "reasoning-delta",
++					type: "text-delta",
+ 					index: block.index,
+-					text: delta.reasoning_content
++					text: parts.text
+ 				};
+ 			}
+ 			for (const call of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+ 				if (typeof call !== "object" || call === null) continue;
+-				const key = typeof call.index === "number" ? call.index : tools.size;
+-				const current = tools.get(key) ?? {
+-					id: "",
+-					name: "",
+-					arguments: "",
+-					index: -1
+-				};
+-				if (typeof call.id === "string" && call.id.length > 0) current.id = call.id;
+-				if (typeof call.function?.name === "string") current.name += call.function.name;
++				const current = slotFor(call);
++				if (current.id === "" && typeof call.id === "string" && call.id.length > 0) current.id = call.id;
++				const name = call.function?.name;
++				if (typeof name === "string" && name.length > 0) current.name = name.startsWith(current.name) ? name : current.name + name;
+ 				const fragment = typeof call.function?.arguments === "string" ? call.function.arguments : "";
+ 				current.arguments += fragment;
+-				tools.set(key, current);
++				if (isObject(call.extra_content)) current.extra = {
++					...current.extra,
++					...call.extra_content
++				};
+ 				if (current.id.length === 0) continue;
+ 				sawOutput = true;
+ 				if (current.index < 0) {
+@@ -3690,11 +3967,32 @@
+ 			}
+ 		}
+ 	}
++	if (stopReason !== void 0 && FAILED_FINISH_REASONS.includes(stopReason.toLowerCase())) throw new LlmError(`llm-service-lite: the provider ended the response with finish_reason "${stopReason}"`, "SERVER");
+ 	const textEnd = closeBlock("text");
+ 	if (textEnd !== void 0) yield textEnd;
+ 	const reasoningEnd = closeBlock("reasoning");
+ 	if (reasoningEnd !== void 0) yield reasoningEnd;
+-	const calls = [...tools.values()].filter((call) => call.index >= 0).sort((left, right) => left.index - right.index);
++	// DSH-Android (patch 17): a named call the endpoint never gave an id gets one now.
++	for (const call of tools) {
++		if (call.index >= 0 || call.name.length === 0) continue;
++		call.id = `call_${globalThis.crypto.randomUUID().replaceAll("-", "").slice(0, 24)}`;
++		call.index = nextIndex;
++		nextIndex += 1;
++		sawOutput = true;
++		yield {
++			type: "block-start",
++			index: call.index,
++			blockType: "tool-call"
++		};
++		yield {
++			type: "tool-call-delta",
++			index: call.index,
++			id: ToolCallId(call.id),
++			name: call.name,
++			argumentsDelta: call.arguments
++		};
++	}
++	const calls = tools.filter((call) => call.index >= 0).sort((left, right) => left.index - right.index);
+ 	for (const call of calls) yield {
+ 		type: "block-end",
+ 		index: call.index,
+@@ -3702,7 +4000,8 @@
+ 			type: "tool-call",
+ 			id: ToolCallId(call.id),
+ 			name: call.name,
+-			arguments: call.arguments
++			// DSH-Android (patch 17): a no-argument call streamed as "" is the empty object.
++			arguments: call.arguments.trim() === "" ? "{}" : call.arguments
+ 		}
+ 	};
+ 	const hasToolCalls = calls.length > 0;
+@@ -3716,9 +4015,22 @@
+ 		type: "usage",
+ 		usage: pendingUsage
+ 	};
++	const extras = Object.fromEntries(calls.filter((call) => isObject(call.extra)).map((call) => [call.id, call.extra]));
++	const recorded = context?.endpoint !== void 0 && (seen.size > 0 || Object.keys(extras).length > 0);
+ 	yield {
+ 		type: "finish",
+-		reason: finish
++		reason: finish,
++		...recorded ? { replayState: { response: {
++			kind: CHAT_REPLAY_KIND,
++			version: 1,
++			endpoint: context.endpoint,
++			...seen.size === 0 ? {} : { reasoning: {
++				fields: REASONING_SOURCES.filter((source) => seen.has(source)),
++				...details.length === 0 ? {} : { details },
++				...part === void 0 ? {} : { part }
++			} },
++			...Object.keys(extras).length === 0 ? {} : { calls: extras }
++		} } } : {}
+ 	};
+ }
+ //#endregion
+@@ -4938,28 +5250,60 @@
+ 		const versions = await prepareRequestImages(model, options.messages, this.dependencies.resolveAttachments?.(), profile.imageRequestBudget, signal);
+ 		signal.throwIfAborted();
+ 		const transport = TRANSPORTS[profile.interfaceType];
+-		const request = transport.request(profile, model, options, apiKey, versions);
+-		const response = await fetch(request.url, {
+-			method: "POST",
+-			headers: request.headers,
+-			body: request.body,
+-			signal,
+-			redirect: "error"
+-		});
+-		if (!response.ok) {
++		// DSH-Android (patch 17): a chat endpoint that refuses an echoed thinking field by name (HTTP 400)
++		// is asked once more without echo, and remembered (see `echoRefused`).
++		let request;
++		let response;
++		for (let attempt = 0;; attempt += 1) {
++			request = transport.request(profile, model, options, apiKey, versions);
++			response = await fetch(request.url, {
++				method: "POST",
++				headers: request.headers,
++				body: request.body,
++				signal,
++				redirect: "error"
++			});
++			if (response.ok) break;
+ 			const text = await response.text();
++			const echoed = request.echoed ?? [];
++			if (response.status === 400 && attempt === 0 && echoed.length > 0 && !model.replayRequired && namesEchoedField(text, echoed)) {
++				echoRefused.add(endpointKey(profile.baseURL));
++				continue;
++			}
+ 			let raw;
+ 			try {
+ 				raw = JSON.parse(text);
+ 			} catch (_nonJsonGatewayError) {
+ 				raw = { message: text.slice(0, 2e3) };
+ 			}
++			if (typeof raw === "string") raw = { message: raw.slice(0, 2e3) };
+ 			if (response.status === 404) raw = { message: notFoundMessage(errorMessage(raw, 404), profile.baseURL) };
+ 			throw classifyFailure(raw, response.status, response.headers);
+ 		}
+ 		if (response.body === null) throw new LlmError(`llm-service-lite: provider "${profile.provider}" returned no response body`, "EMPTY_RESPONSE");
++		const context = { endpoint: endpointKey(profile.baseURL) };
++		// DSH-Android (patch 17): an endpoint or proxy that ignores `stream: true` answers one JSON
++		// completion; it is translated as the single stream frame it is equivalent to.
++		if (profile.interfaceType === "openai-chat-completions" && /\bjson\b/iu.test(response.headers.get("content-type") ?? "")) {
++			const text = await response.text();
++			activity();
++			let raw;
++			try {
++				raw = JSON.parse(text);
++			} catch (_invalidJsonBody) {
++				throw new LlmError("llm-service-lite: provider returned a JSON content type with an invalid body", "MALFORMED_RESPONSE");
++			}
++			if (!isObject(raw)) throw new LlmError("llm-service-lite: provider returned a JSON body that is not an object", "MALFORMED_RESPONSE");
++			if (raw.error !== void 0 && raw.error !== null) {
++				// LM Studio answers a wrong path with 200 + `{"error": "Unexpected endpoint or method. (POST /chat/completions)"}`.
++				if (/unexpected endpoint|\bnot found\b/iu.test(errorMessage(raw))) throw classifyFailure({ message: notFoundMessage(errorMessage(raw, 404), profile.baseURL) }, 404, response.headers);
++				throw classifyFailure(raw, void 0, response.headers);
++			}
++			yield* this.materializeImages(model, translateChatStream(oneEvent(completionAsChunk(raw)), () => true, context));
++			return;
++		}
+ 		const reader = new SseReader(response.body, activity);
+-		yield* this.materializeImages(model, transport.translate(reader.events(), () => reader.sawDone));
++		yield* this.materializeImages(model, transport.translate(reader.events(), () => reader.sawDone, context));
+ 	}
+ 	/**
+ 	* Commit every image the endpoint returned and republish it as a durable

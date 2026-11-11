@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "AccessDenied",
+    "message": "The request failed because you do not have access to the requested resource. Request id: scrubbed",
+    "param": "",
+    "type": "Forbidden"
+  }
+}

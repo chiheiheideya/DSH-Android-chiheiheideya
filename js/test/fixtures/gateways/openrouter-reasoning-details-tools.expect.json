@@ -1,0 +1,50 @@
+{
+  "provider": "OpenRouter (openrouter.ai/api/v1)",
+  "source": "from docs: openrouter.ai/docs/api-reference/streaming (\": OPENROUTER PROCESSING\" comments), openrouter.ai/docs/use-cases/reasoning-tokens (reasoning + reasoning_details fragments by index, signature last; send reasoning_details back unmodified with tool calls)",
+  "model": "anthropic/claude-sonnet-4.5",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "toolu_vrtx_scrubbed05"
+      }
+    ],
+    "usage": {
+      "inputTokens": 600,
+      "outputTokens": 70,
+      "totalTokens": 670,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning",
+      "reasoning_details"
+    ]
+  },
+  "echo": {
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "reasoning_details": [
+      {
+        "type": "reasoning.text",
+        "text": "The user wants the weather in Paris. I should call get_weather.",
+        "format": "anthropic-claude-v1",
+        "index": 0,
+        "signature": "EqQBCkgIBRABGAIiQL1scrubbedsignature=="
+      }
+    ],
+    "absent": [
+      "reasoning_content"
+    ]
+  },
+  "body": "openrouter-reasoning-details-tools.sse"
+}

@@ -1,0 +1,18 @@
+{
+  "provider": "Volcano Engine Ark (ark.cn-beijing.volces.com/api/v3)",
+  "source": "from docs: volcengine.com/docs/82379/1299023 (AccessDenied, 403: no permission for the requested resource / model endpoint)",
+  "model": "doubao-seed-2-1-pro-260915",
+  "http": {
+    "status": 403,
+    "contentType": "application/json"
+  },
+  "basePath": "/api/v3",
+  "expect": {
+    "error": {
+      "code": "MODEL_NOT_AVAILABLE",
+      "status": 403,
+      "messageIncludes": "you do not have access to the requested resource"
+    }
+  },
+  "body": "ark-403-access-denied.json"
+}

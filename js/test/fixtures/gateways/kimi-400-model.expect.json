@@ -1,0 +1,17 @@
+{
+  "provider": "Moonshot Kimi (api.moonshot.cn/v1)",
+  "source": "from docs: platform.moonshot.cn/docs/api/errors",
+  "model": "kimi-nope",
+  "http": {
+    "status": 404,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 404,
+      "messageIncludes": "Not found the model"
+    }
+  },
+  "body": "kimi-400-model.json"
+}

@@ -1,0 +1,129 @@
+--- a/@snnh/dsh-llm-service-lite/lib/index.js
++++ b/@snnh/dsh-llm-service-lite/lib/index.js
+@@ -2736,7 +2736,48 @@
+ 	// does not survive the trip to the app (TypeError('fetch failed') alone tells the user nothing).
+ 	const detail = describeTransportCause(error, baseURL);
+ 	const suffix = detail === "" ? "" : `: ${detail}`;
+-	return error instanceof TypeError || TRANSPORT_RETRYABLE_CODES.includes(code) ? new LlmError(`llm-service-lite: provider transport failed${suffix}`, "TRANSPORT", { cause: error }) : new LlmError(`llm-service-lite: provider request failed${suffix}`, "UNKNOWN", { cause: error });
++	// DSH-Android (patch 16): only a fetch-level failure is a network error. Any other TypeError
++	// (or RangeError / SyntaxError) was thrown while translating a response that did arrive, i.e.
++	// the provider sent a shape this adapter does not handle; retrying cannot help, and calling it
++	// a network failure sends the user hunting DNS / TLS / proxy problems that are not there.
++	if (isNetworkFailure(error) || TRANSPORT_RETRYABLE_CODES.includes(code)) return new LlmError(`llm-service-lite: provider transport failed${suffix}`, "TRANSPORT", { cause: error });
++	if (isParseFailure(error)) return new LlmError(`llm-service-lite: could not parse the provider's response: ${errorText(error)}`, "MALFORMED_RESPONSE", { cause: error });
++	return new LlmError(`llm-service-lite: provider request failed${suffix}`, "UNKNOWN", { cause: error });
++}
++/**
++* DSH-Android (patch 16). A 404 names its status and, when the base URL is a bare origin, the
++* missing version segment: `https://integrate.api.nvidia.com` + `/chat/completions` is a 404,
++* `…/v1/chat/completions` is the endpoint. The model request itself keeps the configured base.
++*/
++function notFoundMessage(original, baseURL) {
++	const url = typeof baseURL === "string" ? URL.parse(baseURL) : null;
++	const origin = url === null ? "" : url.origin;
++	const own = original === "llm-service-lite: provider request failed (404)" || original.trim() === "" ? "" : `: ${redactUrls(original).replace(/\s+/gu, " ").trim().slice(0, 300)}`;
++	const bare = url !== null && url.pathname.replace(/\/+$/u, "") === "";
++	const hint = bare ? `; the base URL has no path, and OpenAI-compatible APIs usually live under /v1: try ${origin}/v1` : "; check the base URL and the model id";
++	return `llm-service-lite: HTTP 404 Not Found from ${origin === "" ? "the provider" : origin}${own}${hint}`;
++}
++/**
++* DSH-Android (patch 16). A failure of the fetch itself: undici's `TypeError('fetch failed')`
++* (connect, DNS, TLS, redirect refusal; the cause says which), or a TypeError whose cause chain
++* carries a coded network error (e.g. `terminated` ← `UND_ERR_SOCKET` while reading a body).
++*/
++function isNetworkFailure(error) {
++	if (!(error instanceof TypeError)) return false;
++	if (error.message === "fetch failed") return true;
++	const root = transportRootCause(error);
++	return root !== void 0 && root !== error && typeof root.code === "string" && root.code !== "";
++}
++/** DSH-Android (patch 16). An uncoded language error: a programming / protocol mismatch, not I/O. */
++function isParseFailure(error) {
++	if (!(error instanceof TypeError || error instanceof RangeError || error instanceof SyntaxError)) return false;
++	return !(typeof error.code === "string" && error.code !== "");
++}
++/** DSH-Android (patch 16). `Name: message` of a thrown value, one line, URLs reduced to their origin. */
++function errorText(error) {
++	const name = typeof error?.name === "string" && error.name !== "" ? error.name : typeof error;
++	const message = typeof error?.message === "string" ? redactUrls(error.message).replace(/\s+/gu, " ").trim().slice(0, 200) : String(error).slice(0, 200);
++	return message === "" ? name : `${name}: ${message}`;
+ }
+ /**
+ * DSH-Android (patch 14). Codes a bare (non-TypeError) throw may carry and still count as a
+@@ -2823,7 +2864,10 @@
+ 	if (url !== null && url.hostname !== "") target = `${url.hostname}:${url.port || (url.protocol === "https:" ? "443" : "80")}`;
+ 	else if (typeof root?.address === "string") target = `${root.address.includes(":") ? `[${root.address}]` : root.address}${root.port === void 0 ? "" : `:${root.port}`}`;
+ 	const own = typeof root?.message === "string" ? redactUrls(root.message).replace(/\s+/gu, " ").trim().slice(0, 200) : "";
+-	const text = TRANSPORT_CAUSE_TEXT[code] ?? (TLS_CAUSE.test(code) ? `TLS certificate rejected: ${own}` : own);
++	// DSH-Android (patch 16): a failure with no coded or described cause still names itself
++	// (`TypeError: fetch failed`), so the user never gets a bare host:port and nothing else.
++	const fallback = root === void 0 && typeof error === "object" && error !== null ? errorText(error) : "";
++	const text = TRANSPORT_CAUSE_TEXT[code] ?? (TLS_CAUSE.test(code) ? `TLS certificate rejected: ${own}` : own || fallback);
+ 	return [code, target, text === "" || text === code ? "" : `(${text})`].filter((part) => part !== "").join(" ");
+ }
+ //#endregion
+@@ -3477,11 +3521,14 @@
+ /** Validated token accounting from one provider usage report. */
+ function usageOf$1(chunk) {
+ 	const usage = chunk.usage;
+-	if (usage === void 0 || typeof usage.prompt_tokens !== "number" || typeof usage.completion_tokens !== "number") return;
++	// DSH-Android (patch 16): OpenAI-compatible gateways send `"usage": null` on every content frame
++	// (OpenAI itself does with stream_options.include_usage); null, like any non-object, is "no report yet".
++	if (typeof usage !== "object" || usage === null || typeof usage.prompt_tokens !== "number" || typeof usage.completion_tokens !== "number") return;
+ 	const prompt = usage.prompt_tokens;
+ 	const completion = usage.completion_tokens;
+ 	if (!Number.isSafeInteger(prompt) || prompt < 0 || !Number.isSafeInteger(completion) || completion < 0) throw new LlmError("llm-service-lite: provider returned invalid token usage", "MALFORMED_RESPONSE");
+-	const cached = usage.prompt_tokens_details?.cached_tokens ?? 0;
++	const details = usage.prompt_tokens_details;
++	const cached = (typeof details === "object" && details !== null ? details.cached_tokens : void 0) ?? 0;
+ 	if (!Number.isSafeInteger(cached) || cached < 0 || cached > prompt) throw new LlmError("llm-service-lite: provider returned invalid cached token usage", "MALFORMED_RESPONSE");
+ 	return {
+ 		inputTokens: prompt - cached,
+@@ -3542,11 +3589,12 @@
+ 		return closing;
+ 	};
+ 	for await (const raw of events) {
+-		if (raw.error !== void 0) throw classifyFailure(raw, void 0);
++		if (raw.error !== void 0 && raw.error !== null) throw classifyFailure(raw, void 0);
+ 		const chunk = raw;
+ 		const usage = usageOf$1(chunk);
+ 		if (usage !== void 0) pendingUsage = usage;
+-		for (const choice of chunk.choices ?? []) {
++		for (const choice of Array.isArray(chunk.choices) ? chunk.choices : []) {
++			if (typeof choice !== "object" || choice === null) continue;
+ 			if (typeof choice.finish_reason === "string") stopReason = choice.finish_reason;
+ 			for (const url of imageUrls(choice)) {
+ 				for (const end of endOpenBlocks()) yield end;
+@@ -3566,7 +3614,7 @@
+ 				};
+ 			}
+ 			const delta = choice.delta;
+-			if (delta === void 0) continue;
++			if (typeof delta !== "object" || delta === null) continue;
+ 			if (typeof delta.content === "string" && delta.content.length > 0) {
+ 				sawOutput = true;
+ 				if (!open.has("text")) for (const end of endOpenBlocks()) yield end;
+@@ -3599,7 +3647,8 @@
+ 					text: delta.reasoning_content
+ 				};
+ 			}
+-			for (const call of delta.tool_calls ?? []) {
++			for (const call of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
++				if (typeof call !== "object" || call === null) continue;
+ 				const key = typeof call.index === "number" ? call.index : tools.size;
+ 				const current = tools.get(key) ?? {
+ 					id: "",
+@@ -4905,6 +4954,7 @@
+ 			} catch (_nonJsonGatewayError) {
+ 				raw = { message: text.slice(0, 2e3) };
+ 			}
++			if (response.status === 404) raw = { message: notFoundMessage(errorMessage(raw, 404), profile.baseURL) };
+ 			throw classifyFailure(raw, response.status, response.headers);
+ 		}
+ 		if (response.body === null) throw new LlmError(`llm-service-lite: provider "${profile.provider}" returned no response body`, "EMPTY_RESPONSE");
+@@ -5611,4 +5661,4 @@
+ 	});
+ }
+ //#endregion
+-export { ConcurrencyLimiter, Config, DISCOVERY_MAX_RESPONSE_BYTES, LISTABLE_INTERFACE_TYPES, OwcProfilesAdapter, apply, classifyTransport, convertOfficialProvider, describeTransportCause, discoverEndpointModels, inject, modelOf, name, resolveProfiles };
++export { ConcurrencyLimiter, Config, DISCOVERY_MAX_RESPONSE_BYTES, LISTABLE_INTERFACE_TYPES, OwcProfilesAdapter, apply, classifyTransport, convertOfficialProvider, describeTransportCause, discoverEndpointModels, inject, modelOf, name, notFoundMessage, resolveProfiles };

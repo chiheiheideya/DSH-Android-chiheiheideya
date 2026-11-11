@@ -1,0 +1,20 @@
+--- a/@deepseek-ai/node-addon-system/lib/flock.js
++++ b/@deepseek-ai/node-addon-system/lib/flock.js
+@@ -6,6 +6,17 @@
+ function loadBinding() {
+     if (binding)
+         return binding;
++    // DSH-Android: the app ships the addon as $DSH_NATIVE_DIR/libdsh_flock.so
++    // (nativeLibraryDir); Node's require() only treats *.node as native, so dlopen it.
++    if (process.env.DSH_NATIVE_DIR || process.platform === 'android') {
++        const nativeDir = process.env.DSH_NATIVE_DIR;
++        if (!nativeDir)
++            throw Object.assign(new Error('flock on android requires DSH_NATIVE_DIR (libdsh_flock.so)'), { code: 'ERR_FLOCK_UNSUPPORTED_PLATFORM', syscall: 'flock' });
++        const module = { exports: {} };
++        process.dlopen(module, join(nativeDir, 'libdsh_flock.so'));
++        binding = module.exports;
++        return binding;
++    }
+     const { platform, arch } = process;
+     if (platform !== 'linux' && platform !== 'darwin') {
+         throw Object.assign(new Error(`flock is not supported on ${platform}-${arch}`), {

@@ -1,0 +1,21 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/api-reference/chat-streaming (chat.completion.chunk; stream_options.include_usage: usage null on every chunk, a last chunk with choices [] and usage; obfuscation field; parallel tool calls with id/name only in their first fragment)",
+  "model": "gpt-4.1",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8"
+  },
+  "expect": {
+    "text": "Hello! How can I help?",
+    "usage": {
+      "inputTokens": 9,
+      "outputTokens": 7,
+      "totalTokens": 16,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "stop"
+  },
+  "body": "openai-text-include-usage.sse"
+}

@@ -1,0 +1,6 @@
+{
+  "error": {
+    "message": "No endpoints found that support tool use. To learn more about provider routing, visit: https://openrouter.ai/docs/provider-routing",
+    "code": 404
+  }
+}

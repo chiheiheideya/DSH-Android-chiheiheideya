@@ -1,0 +1,147 @@
+--- a/@deepseek-ai/dsh-sdk-jsonrpc-server/lib/index.js
++++ b/@deepseek-ai/dsh-sdk-jsonrpc-server/lib/index.js
+@@ -1,6 +1,7 @@
+ import Schema from "@deepseek-ai/schemastery";
+ import { JsonRpcLineTransport } from "@deepseek-ai/dsh-sdk-protocol";
+ import { resolve } from "node:path";
++import { randomUUID } from "node:crypto";
+ import { brandString } from "@deepseek-ai/dsh-brand";
+ import { admitEncodedImages } from "@deepseek-ai/dsh-attachment";
+ import { ReasoningEffortId, createUserMessage } from "@deepseek-ai/dsh-llm";
+@@ -60,10 +61,36 @@
+ 	shutdownTask;
+ 	shuttingDown = false;
+ 	initialized = false;
++	// DSH-Android backport (upstream 0.2.1-rc.3 sdk/server): approval/request and
++	// user-question/ask server-to-client requests, opted in at initialize.
++	approvalRequests = false;
++	userQuestionsEnabled = false;
++	lifetime = new AbortController();
+ 	constructor(ctx, transport, options = {}) {
+ 		this.ctx = ctx;
+ 		this.transport = transport;
+ 		this.options = options;
++		this.disposers.push(ctx.on("approval/request", async (request, next) => {
++			if (!this.approvalRequests || !this.ownsAgent(request.agent)) return next();
++			const sessionId = String(request.agent.session.id);
++			const rootSessionId = this.rootSessionIdOf(request.agent);
++			const params = {
++				sessionId,
++				...rootSessionId === void 0 || rootSessionId === sessionId ? {} : { rootSessionId },
++				toolName: request.toolName,
++				...request.callId === void 0 ? {} : { callId: request.callId },
++				...request.reason === void 0 ? {} : { reason: request.reason }
++			};
++			const signal = request.signal === void 0 ? this.lifetime.signal : AbortSignal.any([request.signal, this.lifetime.signal]);
++			const result = await this.transport.request("approval/request", params, signal);
++			if (result === null || typeof result !== "object" || !("outcome" in result) || result.outcome !== "allowed-once" && result.outcome !== "rejected" && result.outcome !== "cancelled") throw new TypeError("approval/request response requires an allowed-once, rejected, or cancelled outcome");
++			return result.outcome;
++		}));
++		this.disposers.push(ctx.on("user-questions/request", async (request, next) => {
++			const agent = request.agent;
++			if (!this.userQuestionsEnabled || agent === void 0 || !this.ownsAgent(agent)) return next();
++			return this.askUserQuestion(request, String(agent.session.id));
++		}));
+ 		const serverOptions = this.options;
+ 		this.disposers.push(ctx.on("session/event", (session, event) => {
+ 			const record = this.sessions.get(session.id);
+@@ -118,6 +145,7 @@
+ 	* @returns server identity for the handshake.
+ 	*/
+ 	async initialize(params) {
++		if (params.approvalRequests !== void 0 && typeof params.approvalRequests !== "boolean") throw new TypeError("initialize approvalRequests must be a boolean");
+ 		if (params.reasoningEffort !== void 0 && (typeof params.reasoningEffort !== "string" || params.reasoningEffort.length === 0)) throw new TypeError("initialize reasoningEffort must be a non-empty string");
+ 		if (params.maxTokens !== void 0 && (!Number.isSafeInteger(params.maxTokens) || params.maxTokens <= 0)) throw new TypeError("initialize maxTokens must be a positive safe integer");
+ 		const cwd = resolve(params.cwd);
+@@ -139,6 +167,8 @@
+ 		this.model = model;
+ 		this.reasoningEffort = reasoningEffort;
+ 		this.maxTokens = params.maxTokens;
++		this.approvalRequests = params.approvalRequests === true;
++		this.userQuestionsEnabled = params.capabilities?.userQuestions === true;
+ 		this.initialized = true;
+ 		return { serverInfo: {
+ 			name: "deepseek-harness-sdk-runtime",
+@@ -203,6 +233,72 @@
+ 			}
+ 		}
+ 	}
++	/** Whether `agent` is an SDK-owned root Agent or one of its in-process descendants. */
++	ownsAgent(agent) {
++		const agents = this.ctx.agents;
++		if (agent === void 0 || agents.get(agent.id) !== agent) return false;
++		const liveAgents = agents.list();
++		const ancestors = new Set([agent]);
++		for (const current of ancestors) {
++			if (this.sessions.get(String(current.session.id))?.handle.agent === current) return true;
++			for (const parent of liveAgents) if (agents.isOwnedBy(current.id, parent)) ancestors.add(parent);
++		}
++		return false;
++	}
++	/** The SDK-owned root session of `agent` (itself for a root). */
++	rootSessionIdOf(agent) {
++		const agents = this.ctx.agents;
++		const liveAgents = agents.list();
++		const ancestors = new Set([agent]);
++		for (const current of ancestors) {
++			if (this.sessions.get(String(current.session.id))?.handle.agent === current) return String(current.session.id);
++			for (const parent of liveAgents) if (agents.isOwnedBy(current.id, parent)) ancestors.add(parent);
++		}
++	}
++	async askUserQuestion(request, sessionId) {
++		const params = {
++			requestId: randomUUID(),
++			sessionId,
++			questions: request.questions
++		};
++		const signal = request.signal === void 0 ? this.lifetime.signal : AbortSignal.any([request.signal, this.lifetime.signal]);
++		const questionError = (message, code, cause) => Object.assign(new Error(message, cause === void 0 ? void 0 : { cause }), {
++			name: "UserQuestionError",
++			code
++		});
++		if (signal.aborted) throw questionError("SDK user question was cancelled", "ASK_ABORTED");
++		const cancelled = () => {
++			try {
++				this.transport.notify("user-question.cancelled", {
++					requestId: params.requestId,
++					sessionId
++				});
++			} catch {}
++		};
++		signal.addEventListener("abort", cancelled, { once: true });
++		try {
++			const value = await this.transport.request("user-question/ask", params, signal);
++			const ids = request.questions.map((question) => question.id);
++			const bad = () => questionError("SDK host must answer each question id exactly once with selected labels and optional custom text", "BAD_ANSWER");
++			if (value === null || typeof value !== "object" || !Array.isArray(value.answers)) throw bad();
++			const answers = value.answers.map((answer) => {
++				if (answer === null || typeof answer !== "object" || typeof answer.id !== "string" || !Array.isArray(answer.selected) || !answer.selected.every((label) => typeof label === "string") || "custom" in answer && typeof answer.custom !== "string") throw bad();
++				return {
++					id: answer.id,
++					selected: answer.selected,
++					..."custom" in answer ? { custom: answer.custom } : {}
++				};
++			});
++			const seen = new Set(answers.map((answer) => answer.id));
++			if (seen.size !== answers.length || answers.length !== ids.length || !ids.every((id) => seen.has(id))) throw bad();
++			return { answers };
++		} catch (error) {
++			if (error?.name === "UserQuestionError") throw error;
++			throw questionError(signal.aborted ? "SDK user question was cancelled" : "SDK host could not answer the user question", signal.aborted ? "ASK_ABORTED" : "PROVIDER_ERROR", error);
++		} finally {
++			signal.removeEventListener("abort", cancelled);
++		}
++	}
+ 	assertLiveAgent(rec, sessionId) {
+ 		if (this.ctx.agents.get(rec.handle.agent.id) !== rec.handle.agent) throw new Error(`session agent was disposed outside the server: ${sessionId}`);
+ 	}
+@@ -242,6 +338,9 @@
+ 	}
+ 	async performShutdown() {
+ 		this.shuttingDown = true;
++		this.approvalRequests = false;
++		this.userQuestionsEnabled = false;
++		this.lifetime.abort(/* @__PURE__ */ new Error("SDK server is shutting down"));
+ 		const pendingCreations = [...this.sessionCreations.values()];
+ 		await Promise.allSettled(pendingCreations);
+ 		this.sessionCreations.clear();

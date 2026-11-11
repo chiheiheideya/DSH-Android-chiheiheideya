@@ -1,0 +1,117 @@
+--- a/@deepseek-ai/dsh-tools/lib/index.js
++++ b/@deepseek-ai/dsh-tools/lib/index.js
+@@ -2584,6 +2584,25 @@
+ 	});
+ }
+ //#endregion
++//#region DSH-Android js patch 19
++/** The nearest Loader entry on a context's fiber chain, as `{ entryId, rowId, moduleName }`. */
++function registrationOwner(ctx) {
++	let fiber = ctx?.fiber;
++	const seen = /* @__PURE__ */ new Set();
++	while (fiber !== void 0 && fiber !== null && !seen.has(fiber)) {
++		seen.add(fiber);
++		const entry = fiber.entry;
++		if (entry !== void 0 && entry !== null) return {
++			entryId: entry.id,
++			rowId: entry.options?.id,
++			moduleName: entry.options?.name
++		};
++		const parent = fiber.parent?.fiber;
++		if (parent === fiber) break;
++		fiber = parent;
++	}
++}
++//#endregion
+ //#region lib/types/index.js
+ /**
+ * Tool registry, model presentation modes, and pre/guard/around/post/result
+@@ -2973,13 +2992,44 @@
+ 	*/
+ 	register(definition) {
+ 		const name = definition.name;
++		// DSH-Android (js patch 19): remember which Loader entry registers each tool, so the
++		// phone can tell a third-party plugin's tools from built-ins (mode category, approvals).
++		const owner = registrationOwner(this.ctx);
+ 		const output = definition.output;
+ 		if (output === void 0 || typeof output !== "object" || typeof output.render !== "function" || output.presentationMeta !== void 0 && typeof output.presentationMeta !== "function") throw new TypeError(`tool "${name}" must declare output { schema, render, presentationMeta? }`);
+ 		assertSupportedJsonSchema(output.schema);
+ 		const timeoutMs = definition.timeoutMs;
+ 		if (timeoutMs !== void 0 && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new TypeError(`tool "${name}" timeoutMs must be a positive finite number`);
+ 		if (name === "run_code") throw new Error(`tool name "${RUN_CODE_NAME}" is reserved for the PTC mode presentation transport and cannot be registered or shadowed`);
+-		return this.layers.effect(this.ctx, (layer) => layer.tools.insert(name, definition), { label: "tools.register()" });
++		const dispose = this.layers.effect(this.ctx, (layer) => layer.tools.insert(name, definition), { label: "tools.register()" });
++		if (owner === void 0) return dispose;
++		const owners = this.registrationOwners ??= /* @__PURE__ */ new Map();
++		const record = {
++			...owner,
++			definition
++		};
++		owners.set(name, [...owners.get(name) ?? [], record]);
++		return () => {
++			const left = (owners.get(name) ?? []).filter((item) => item !== record);
++			if (left.length === 0) owners.delete(name);
++			else owners.set(name, left);
++			return dispose();
++		};
++	}
++	/**
++	* DSH-Android (js patch 19): the Loader entry that registered the most recent live tool
++	* named `name` (`{ entryId, rowId, moduleName }`), or undefined for a tool registered
++	* outside any Loader entry.
++	* @param name - public tool name.
++	* @returns the registering entry.
++	*/
++	ownerOf(name) {
++		const record = this.registrationOwners?.get(name)?.at(-1);
++		return record === void 0 ? void 0 : {
++			entryId: record.entryId,
++			rowId: record.rowId,
++			moduleName: record.moduleName
++		};
+ 	}
+ 	/**
+ 	* Restrict global tools for the calling agent scope. Empty filters, unknown
+--- a/@deepseek-ai/dsh-commands/lib/index.js
++++ b/@deepseek-ai/dsh-commands/lib/index.js
+@@ -265,7 +265,39 @@
+ 		*/
+ 		register(definition) {
+ 			const registered = normalizeDefinition(definition);
+-			return this.layers.effect(this.ctx, (layer) => layer.commands.insert(registered.definition.name, registered), { label: "commands.register()" });
++			const dispose = this.layers.effect(this.ctx, (layer) => layer.commands.insert(registered.definition.name, registered), { label: "commands.register()" });
++			// DSH-Android (js patch 19): remember which Loader entry registers each command.
++			const name = registered.definition.name;
++			let fiber = this.ctx?.fiber;
++			const seen = /* @__PURE__ */ new Set();
++			let owner;
++			while (fiber !== void 0 && fiber !== null && !seen.has(fiber)) {
++				seen.add(fiber);
++				if (fiber.entry) {
++					owner = { entryId: fiber.entry.id, rowId: fiber.entry.options?.id, moduleName: fiber.entry.options?.name };
++					break;
++				}
++				const parent = fiber.parent?.fiber;
++				if (parent === fiber) break;
++				fiber = parent;
++			}
++			if (owner === void 0) return dispose;
++			const owners = this.registrationOwners ??= /* @__PURE__ */ new Map();
++			owners.set(name, [...owners.get(name) ?? [], owner]);
++			return () => {
++				const left = (owners.get(name) ?? []).filter((item) => item !== owner);
++				if (left.length === 0) owners.delete(name);
++				else owners.set(name, left);
++				return dispose();
++			};
++		}
++		/**
++		* DSH-Android (js patch 19): the Loader entry that registered the most recent live command named `name`.
++		* @param name - command name.
++		* @returns `{ entryId, rowId, moduleName }`, or undefined outside any Loader entry.
++		*/
++		ownerOf(name) {
++			return this.registrationOwners?.get(name)?.at(-1);
+ 		}
+ 		/**
+ 		* Register the sole authority that resolves staged file receipts for command submissions.

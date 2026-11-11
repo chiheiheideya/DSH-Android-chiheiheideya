@@ -1,0 +1,17 @@
+{
+  "provider": "OpenRouter (openrouter.ai/api/v1)",
+  "source": "from docs: openrouter.ai/docs/api-reference/errors ({\"error\":{\"code\": <int>, \"message\", \"metadata\"?}})",
+  "model": "some/model-without-tools",
+  "http": {
+    "status": 404,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 404,
+      "messageIncludes": "No endpoints found that support tool use"
+    }
+  },
+  "body": "openrouter-404-no-tool-endpoints.json"
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow_external_apps">Allow other apps</string>
+    <string name="allow_external_apps_desc">Other apps can ask DSH to run a task through RUN_TASK (no screen content is attached). Off by default.</string>
+    <string name="external_refused">%1$s asked DSH to run a task; refused. Turn on Settings → General → Allow other apps to accept.</string>
+    <string name="external_unknown_app">Another app</string>
+    <string name="err_interrupted_previous">The app was stopped by the system during this turn. Tap Continue to pick up where it left off.</string>
+    <string name="err_engine_crash_loop">The agent engine keeps crashing, so automatic recovery is paused. See Settings → About → Doctor for the crash record, or tap Continue to retry.</string>
+    <string name="engine_recovering">The engine exited unexpectedly; restarting and continuing…</string>
+    <string name="err_bg_start">Android did not allow starting the engine in the background (usually battery optimization was turned back on). Tap the notification to run it.</string>
+    <string name="deferred_title">Tap to run: %1$s</string>
+    <string name="deferred_text">Android blocked a background start; tap to start this automation yourself. Granting Unrestricted battery avoids this.</string>
+    <string name="ime_label">DSH keyboard</string>
+    <string name="ime_bar">DSH keyboard (lets the agent type) · tap to switch back to your keyboard</string>
+    <string name="engine_last_exit">Last engine exit</string>
+    <string name="err_open_doctor">Open Doctor</string>
+</resources>

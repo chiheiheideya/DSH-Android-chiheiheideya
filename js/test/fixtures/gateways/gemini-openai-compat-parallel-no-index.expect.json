@@ -1,0 +1,49 @@
+{
+  "provider": "Google Gemini OpenAI compatibility (generativelanguage.googleapis.com/v1beta/openai)",
+  "source": "from docs: ai.google.dev/gemini-api/docs/openai (tool_calls without `index`, parallel calls in one chunk; thought signatures in tool_calls[].extra_content.google, required back on the next request)",
+  "model": "gemini-2.5-flash",
+  "basePath": "/v1beta/openai",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "function-call-scrubbed11"
+      },
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Tokyo"
+        },
+        "id": "function-call-scrubbed12"
+      }
+    ],
+    "usage": {
+      "inputTokens": 90,
+      "outputTokens": 30,
+      "totalTokens": 120,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": []
+  },
+  "echo": {
+    "extra_content": [
+      {
+        "google": {
+          "thought_signature": "CiQBscrubbedThoughtSignatureA=="
+        }
+      },
+      null
+    ]
+  },
+  "body": "gemini-openai-compat-parallel-no-index.sse"
+}

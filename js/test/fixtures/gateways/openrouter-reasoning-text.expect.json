@@ -1,0 +1,25 @@
+{
+  "provider": "OpenRouter (openrouter.ai/api/v1)",
+  "source": "from docs: openrouter.ai/docs/use-cases/reasoning-tokens (`reasoning` string only for providers without reasoning_details); usage chunk with an empty-delta choice",
+  "model": "deepseek/deepseek-r1-0528",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "Hi there!",
+    "reasoning": "Simple greeting.",
+    "usage": {
+      "inputTokens": 12,
+      "outputTokens": 9,
+      "totalTokens": 21,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "stop",
+    "replayFields": [
+      "reasoning"
+    ]
+  },
+  "body": "openrouter-reasoning-text.sse"
+}

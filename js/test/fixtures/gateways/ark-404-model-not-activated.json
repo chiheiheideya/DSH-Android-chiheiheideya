@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "ModelNotOpen",
+    "message": "Your account 2100000000 has not activated the model doubao-seed-1-6. Please activate the model service in the Ark Console. Request id: scrubbed",
+    "param": "",
+    "type": "NotFound"
+  }
+}

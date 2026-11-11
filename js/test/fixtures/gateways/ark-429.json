@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "RateLimitExceeded.EndpointRPMExceeded",
+    "message": "The request has exceeded the RPM limit of the endpoint. Request id: scrubbed",
+    "param": "",
+    "type": "TooManyRequests"
+  }
+}

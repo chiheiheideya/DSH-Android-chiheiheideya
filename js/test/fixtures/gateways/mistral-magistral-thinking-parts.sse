@@ -1,0 +1,16 @@
+data: {"id":"scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"magistral-medium-latest","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"magistral-medium-latest","choices":[{"index":0,"delta":{"content":[{"type":"thinking","thinking":[{"type":"text","text":"The user wants th"}]}]},"finish_reason":null}]}
+
+data: {"id":"scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"magistral-medium-latest","choices":[{"index":0,"delta":{"content":[{"type":"thinking","thinking":[{"type":"text","text":"e weather in Pari"}]}]},"finish_reason":null}]}
+
+data: {"id":"scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"magistral-medium-latest","choices":[{"index":0,"delta":{"content":[{"type":"thinking","thinking":[{"type":"text","text":"s. I should call "}]}]},"finish_reason":null}]}
+
+data: {"id":"scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"magistral-medium-latest","choices":[{"index":0,"delta":{"content":[{"type":"thinking","thinking":[{"type":"text","text":"get_weather."}]}]},"finish_reason":null}]}
+
+data: {"id":"scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"magistral-medium-latest","choices":[{"index":0,"delta":{"tool_calls":[{"id":"D681PevKs","function":{"name":"get_weather","arguments":"{\"city\": \"Paris\"}"},"index":0}]},"finish_reason":null}]}
+
+data: {"id":"scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"magistral-medium-latest","choices":[{"index":0,"delta":{"content":""},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":180,"total_tokens":240,"completion_tokens":60}}
+
+data: [DONE]
+

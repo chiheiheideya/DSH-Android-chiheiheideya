@@ -1,0 +1,18 @@
+{
+  "name": "@dsh-android/plugin-device",
+  "version": "0.1.0",
+  "description": "DSH-Android capability bridge client: registers the app's device capabilities (DSH_BRIDGE_FD) as dsh tools with risk-based approval.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./bridge": "./bridge.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "bridge.js", "package.json"],
+  "engines": {
+    "dsh": "0.2.1-rc.5"
+  }
+}

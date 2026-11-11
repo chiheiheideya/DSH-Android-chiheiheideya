@@ -1,0 +1,18 @@
+{
+  "name": "@dsh-android/plugin-account",
+  "version": "0.1.0",
+  "description": "DSH-Android DeepSeek account login: exposes dsh's deepseek-account service over the SDK channel and serves the loopback OAuth callback on 127.0.0.1.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./loopback": "./loopback.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "loopback.js", "package.json"],
+  "engines": {
+    "dsh": "0.2.1-rc.5"
+  }
+}

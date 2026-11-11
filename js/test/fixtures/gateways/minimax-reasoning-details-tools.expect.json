@@ -1,0 +1,48 @@
+{
+  "provider": "MiniMax (api.minimax.io/v1, reasoning_split: true)",
+  "source": "from docs: platform.minimax.io/docs (OpenAI-compatible API, reasoning_split=true streams thinking as reasoning_details; M2 interleaved thinking must be passed back intact with tool calls)",
+  "model": "MiniMax-M2",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        }
+      }
+    ],
+    "usage": {
+      "inputTokens": 270,
+      "outputTokens": 60,
+      "totalTokens": 330,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_details"
+    ]
+  },
+  "echo": {
+    "reasoning_details": [
+      {
+        "type": "reasoning.text",
+        "id": "reasoning-text-1",
+        "format": "MiniMax-response-v1",
+        "index": 0,
+        "text": "The user wants the weather in Paris. I should call get_weather."
+      }
+    ],
+    "absent": [
+      "reasoning_content",
+      "reasoning"
+    ]
+  },
+  "body": "minimax-reasoning-details-tools.sse"
+}

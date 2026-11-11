@@ -1,0 +1,17 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/guides/error-codes (403 for a project without access to the model; code model_not_found)",
+  "model": "gpt-5",
+  "http": {
+    "status": 403,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "MODEL_NOT_AVAILABLE",
+      "status": 403,
+      "messageIncludes": "model \"gpt-5\" is not available to this account: Project `proj_scrubbed` does not have access to model `gpt-5`"
+    }
+  },
+  "body": "openai-403-project-model-access.json"
+}

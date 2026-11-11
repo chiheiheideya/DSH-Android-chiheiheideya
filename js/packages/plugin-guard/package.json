@@ -1,0 +1,22 @@
+{
+  "name": "@dsh-android/plugin-guard",
+  "version": "0.1.0",
+  "description": "DSH-Android policy floor: hardline shell command blocking, approval for mutating built-ins, token/cost budgets, and the phone-context system prompt.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./hardline": "./hardline.js",
+    "./experience": "./experience.js",
+    "./continuation": "./continuation.js",
+    "./session-model": "./session-model.js",
+    "./session-import": "./session-import.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "session-import.js", "hardline.js", "experience.js", "continuation.js", "session-model.js", "package.json"],
+  "engines": {
+    "dsh": "0.2.1-rc.5"
+  }
+}

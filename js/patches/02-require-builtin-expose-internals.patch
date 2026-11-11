@@ -1,0 +1,50 @@
+--- a/node-addon-require-builtin/lib/index.js
++++ b/node-addon-require-builtin/lib/index.js
+@@ -7,16 +7,42 @@
+ exports.isAllowedInternalId = isAllowedInternalId;
+ exports.getBindingInfo = getBindingInfo;
+ const node_path_1 = __importDefault(require("node:path"));
+-const { createEntryApi } = require('node-addon-native-custom-loader');
+-const api = createEntryApi(node_path_1.default.resolve(__dirname, '..'));
++// DSH-Android: the embedder starts Node with --expose-internals, which makes every
++// internal module (internal/modules/esm/loader, ...) loadable through plain
++// require(). That is all dsh needs this addon for, so no native binding (and no
++// runtime machine-code probing of Node getters) is loaded. Without the flag the
++// upstream native path is used unchanged.
++const exposeInternals = process.execArgv.includes('--expose-internals') || process.execArgv.includes('--expose_internals');
++let api;
++function nativeApi() {
++    if (api === undefined) {
++        if (process.env.DSH_NATIVE_DIR || process.platform === 'android')
++            throw new Error('node-addon-require-builtin: DSH-Android ships no native binding; start Node with --expose-internals');
++        const { createEntryApi } = require('node-addon-native-custom-loader');
++        api = createEntryApi(node_path_1.default.resolve(__dirname, '..'));
++    }
++    return api;
++}
+ function requireBuiltin(moduleId) {
+-    return api.requireBuiltin(moduleId);
++    if (exposeInternals)
++        return require(String(moduleId).replace(/^node:/, ''));
++    return nativeApi().requireBuiltin(moduleId);
+ }
+ function isAllowedInternalId(moduleId) {
+-    return api.isAllowedInternalId(moduleId);
++    if (exposeInternals) {
++        try {
++            return require('internal/bootstrap/realm').BuiltinModule.exists(String(moduleId));
++        }
++        catch {
++            return false;
++        }
++    }
++    return nativeApi().isAllowedInternalId(moduleId);
+ }
+ function getBindingInfo() {
+-    return api.getBindingInfo();
++    if (exposeInternals)
++        return { product: 'require-builtin', backend: 'expose-internals', abi: `node-v${process.versions.modules}`, path: null, source: 'expose-internals' };
++    return nativeApi().getBindingInfo();
+ }
+ exports.default = {
+     requireBuiltin,

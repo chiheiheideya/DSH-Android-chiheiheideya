@@ -1,0 +1,17 @@
+{
+  "provider": "Zhipu GLM (open.bigmodel.cn/api/paas/v4)",
+  "source": "from docs: docs.bigmodel.cn/api-reference/api-code ({\"error\":{\"code\": \"<string>\", \"message\"}})",
+  "model": "glm-4.6",
+  "http": {
+    "status": 429,
+    "contentType": "application/json"
+  },
+  "basePath": "/api/paas/v4",
+  "expect": {
+    "error": {
+      "code": "RATE_LIMIT",
+      "status": 429
+    }
+  },
+  "body": "glm-429-concurrency.json"
+}

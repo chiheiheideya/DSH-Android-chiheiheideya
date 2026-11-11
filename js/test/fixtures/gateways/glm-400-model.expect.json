@@ -1,0 +1,18 @@
+{
+  "provider": "Zhipu GLM (open.bigmodel.cn/api/paas/v4)",
+  "source": "from docs: docs.bigmodel.cn/api-reference/api-code ({\"error\":{\"code\": \"<string>\", \"message\"}})",
+  "model": "glm-nope",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "basePath": "/api/paas/v4",
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 400,
+      "messageIncludes": "模型不存在"
+    }
+  },
+  "body": "glm-400-model.json"
+}

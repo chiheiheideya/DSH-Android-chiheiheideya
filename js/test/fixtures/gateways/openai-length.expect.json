@@ -1,0 +1,15 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/api-reference/chat/object (finish_reason \"length\"), no include_usage",
+  "model": "gpt-4.1",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "Once upon a",
+    "usage": null,
+    "finish": "max-tokens"
+  },
+  "body": "openai-length.sse"
+}

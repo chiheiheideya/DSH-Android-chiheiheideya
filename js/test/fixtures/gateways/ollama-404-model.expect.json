@@ -1,0 +1,17 @@
+{
+  "provider": "Ollama (OpenAI compatibility, http://localhost:11434/v1)",
+  "source": "from docs: Ollama OpenAI-compat error envelope ({\"error\":{\"message\",\"type\":\"api_error\"|\"invalid_request_error\",\"param\":null,\"code\":null}})",
+  "model": "llama9",
+  "http": {
+    "status": 404,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 404,
+      "messageIncludes": "try pulling it first"
+    }
+  },
+  "body": "ollama-404-model.json"
+}

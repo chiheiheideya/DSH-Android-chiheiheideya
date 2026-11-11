@@ -1,0 +1,8 @@
+{
+  "provider": "DeepSeek official (api.deepseek.com/v1)",
+  "source": "live capture 2026-10-30, unknown model id (DeepSeek answers 400, not 404); request id scrubbed",
+  "body": "deepseek-400-model-not-found.json",
+  "model": "deepseek-nonexistent",
+  "http": { "status": 400, "contentType": "application/json" },
+  "expect": { "error": { "code": "INVALID_REQUEST", "status": 400, "messageIncludes": "The supported API model names are" } }
+}

@@ -1,0 +1,282 @@
+DSH-Android patch 18: llm-service-lite (vendored @snnh/dsh-llm-service-lite 0.2.1), provider-declared
+request headers and a "model not available to this account" error code. Applies on top of 14, 16, 17.
+
+Route headers (#32). A route could declare static `headers` only. Some providers want more:
+OpenCode Go (opencode.ai/zen/go/v1) answers chat requests without `x-opencode-session` with
+"Request is missing x-opencode-session … INVALID_REQUEST" (its /models works without), and a
+gateway header may be a secret that must not sit in configuration. New route fields:
+ - `sessionHeader`: header name; every model request of a harness session carries it with
+   sha256("dsh-android/session-header/v1\0" + route + "\0" + sessionId)[0..32] (hex): stable for
+   the session (and across engine restarts / resume), unlinkable to the session id, different per
+   session and per route. A request without a session id, and every model listing, gets a fresh
+   random id.
+ - `headerEnv`: header name → credential reference, resolved per request like `apiKeyEnv`
+   (credentials service, else launch environment); unset → MISSING_CREDENTIAL. Never replaces the
+   key's own authorization / x-api-key.
+ - `userAgent`: product token put in front of the harness User-Agent (`DSH-Android/0.2.6
+   deepseek-harness/<v> (+url)`), unless the route declares a User-Agent header itself.
+Final headers are lower-cased, so a declared header replaces a default of the same name whatever
+its case. Model listings (registerModelDiscovery) send the same static / secret headers, the
+User-Agent token and a fresh session id.
+
+MODEL_NOT_AVAILABLE. A 403 "Model.AccessDenied" (DashScope), "您无权访问" (Zhipu 1220), "not
+available for your account" (SiliconFlow 30011), "does not have access to model" (OpenAI project),
+and Ark's 404 ModelNotOpen "has not activated the model" were AUTH or INVALID_REQUEST, so the app
+told the user the key was wrong / the address was wrong. A 4xx (not 401/402/429) that says the model
+is not activated (未开通 / ModelNotOpen / not activated), or that access is denied (on a 403, or
+without "does not exist" wording), is now `MODEL_NOT_AVAILABLE` (not retried) with message
+`llm-service-lite: model "<id>" is not available to this account: <server text>`. Exhausted
+balance stays QUOTA; key complaints and region blocks keep their codes; "does not exist or you do
+not have access" on a 404 (OpenAI) stays INVALID_REQUEST. Exports MODEL_NOT_AVAILABLE_CODE,
+isModelUnavailable, routeHeaders, sessionToken for tests.
+
+--- a/@snnh/dsh-llm-service-lite/lib/index.js
++++ b/@snnh/dsh-llm-service-lite/lib/index.js
+@@ -5,6 +5,7 @@
+ import { longEdgeDimensions, requestImageDimensions } from "@deepseek-ai/dsh-attachment";
+ import { credentialRef } from "@deepseek-ai/dsh-credentials";
+ import { readFileSync } from "node:fs";
++import { createHash, randomUUID } from "node:crypto";
+ import z from "@deepseek-ai/schemastery";
+ import { EventSourceParserStream, ParseError } from "eventsource-parser/stream";
+ /** Long-edge ceiling for one request image; a larger source is scaled down, never up. */
+@@ -1282,6 +1283,20 @@
+ 	apiKey: z.string().role("secret"),
+ 	/** Static request headers. */
+ 	headers: z.dict(z.string()),
++	/**
++	* DSH-Android (patch 18). Request headers whose values are secrets: header name → credential
++	* reference, resolved per request like `apiKeyEnv`, so the value never sits in configuration.
++	*/
++	headerEnv: z.dict(z.string()),
++	/**
++	* DSH-Android (patch 18). A header carrying an opaque per-session id on every model request
++	* (e.g. OpenCode Go's `x-opencode-session`): a one-way hash of the harness session id and the
++	* route, stable across the turns of one session and different across sessions; a request with
++	* no session (model listing) gets a fresh random id.
++	*/
++	sessionHeader: z.string(),
++	/** DSH-Android (patch 18). Product token prepended to the harness User-Agent, e.g. `DSH-Android/0.2.6`. */
++	userAgent: z.string(),
+ 	/** Whether the route may use prompt caching. */
+ 	promptCaching: z.boolean(),
+ 	/** Whether a chat-completions request asks the endpoint to report usage in the stream. */
+@@ -1442,6 +1457,17 @@
+ 	} catch (_invalidHeader) {
+ 		throw new Error(`llm-service-lite: provider "${provider}" header "${name}" is not valid for Fetch; use a valid HTTP field name and a single-line value representable as bytes`);
+ 	}
++	// DSH-Android (patch 18): secret headers, the session header and the User-Agent token.
++	for (const [name, ref] of Object.entries(source.headerEnv ?? {})) {
++		if (!isHeaderName(name)) throw new Error(`llm-service-lite: provider "${provider}" headerEnv names "${name}", which is not a valid HTTP field name`);
++		if (typeof ref !== "string" || ref.length === 0) throw new Error(`llm-service-lite: provider "${provider}" headerEnv "${name}" names no credential`);
++	}
++	if (source.sessionHeader !== void 0 && !isHeaderName(source.sessionHeader)) throw new Error(`llm-service-lite: provider "${provider}" sessionHeader "${source.sessionHeader}" is not a valid HTTP field name`);
++	if (source.userAgent !== void 0) try {
++		new Headers([["user-agent", source.userAgent]]);
++	} catch (_invalidUserAgent) {
++		throw new Error(`llm-service-lite: provider "${provider}" userAgent is not a valid single-line header value`);
++	}
+ 	return source.interfaceType;
+ }
+ /** Reject route-level capability switches the named protocol cannot carry. */
+@@ -1608,6 +1634,10 @@
+ 			apiKeyEnv: source.apiKeyEnv === void 0 ? void 0 : credentialRef(source.apiKeyEnv),
+ 			apiKey: source.apiKey,
+ 			headers: { ...source.headers },
++			// DSH-Android (patch 18)
++			headerEnv: Object.fromEntries(Object.entries(source.headerEnv ?? {}).map(([name, ref]) => [name, credentialRef(ref)])),
++			...source.sessionHeader === void 0 || source.sessionHeader === "" ? {} : { sessionHeader: source.sessionHeader },
++			...source.userAgent === void 0 || source.userAgent === "" ? {} : { userAgent: source.userAgent },
+ 			promptCaching: source.promptCaching ?? false,
+ 			includeUsage: source.includeUsage ?? false,
+ 			extraBody: { ...source.extraBody },
+@@ -2716,12 +2746,14 @@
+ * @param headers - response headers, for `Retry-After` and the request id.
+ * @returns the classified failure, carrying any provider-requested delay.
+ */
+-function classifyFailure(raw, status, headers) {
++function classifyFailure(raw, status, headers, model) {
+ 	const detail = errorDetail(raw);
+ 	const message = errorMessage(raw, status);
+ 	const facts = providerFacts(status, headers);
+ 	// DSH-Android (patch 17): a 403 that says the balance is exhausted (SiliconFlow, Ark, DashScope) is QUOTA, not AUTH.
+ 	const exhausted = isQuotaExceededError(detail) || PROVIDER_QUOTA_EXHAUSTED.test(detail) || PROVIDER_QUOTA_EXHAUSTED_EXTRA.test(detail);
++	// DSH-Android (patch 18): the key is fine, the account may not use this model (未开通 / no access).
++	if (!exhausted && isModelUnavailable(detail, status)) return new LlmError(modelUnavailableMessage(model, message), MODEL_NOT_AVAILABLE_CODE, facts);
+ 	if (status === 401 || status === 403 && !exhausted) return new LlmError(message, "AUTH", facts);
+ 	if (exhausted || status === 402) return new LlmError(message, "QUOTA", facts);
+ 	if (isContextWindowExceededError(detail) || PROVIDER_CONTEXT_OVERFLOW.test(detail)) return new LlmError(message, "CONTEXT_WINDOW_EXCEEDED", facts);
+@@ -2760,6 +2792,68 @@
+ 	if (isParseFailure(error)) return new LlmError(`llm-service-lite: could not parse the provider's response: ${errorText(error)}`, "MALFORMED_RESPONSE", { cause: error });
+ 	return new LlmError(`llm-service-lite: provider request failed${suffix}`, "UNKNOWN", { cause: error });
+ }
++/** DSH-Android (patch 18). The account has not enabled the model, or may not use it. Not retried. */
++const MODEL_NOT_AVAILABLE_CODE = "MODEL_NOT_AVAILABLE";
++/** The model must be switched on first: Ark `ModelNotOpen`, 未开通. */
++const MODEL_NOT_ACTIVATED = /not (?:been )?activated|has not activated|activate the model|ModelNotOpen|model is not enabled|not subscribed to (?:this|the) model|未开通|请开通|需要开通|开通后/iu;
++/** The account / project / key may not use it: DashScope `Model.AccessDenied`, Zhipu 1220, SiliconFlow 30011, OpenAI project access. */
++const MODEL_ACCESS_DENIED = /\bno access\b|\b(?:do|does|did)(?:n't| not) have access\b|access (?:is )?denied|AccessDenied|permission denied|no permission|insufficient permissions?|not authori[sz]ed to (?:use|access)|not available (?:for|to) (?:your|this) (?:account|organization|project|key)|无权限|无权访问|没有权限|没有访问权限|无访问权限|暂未开放|未授权访问/iu;
++/** "Does not exist" wording: a typo'd model id, which a 404 / 400 means first (OpenAI's 404 says "does not exist or you do not have access"). */
++const MODEL_MISSING = /does not exist|not exist|no such model|not found|unknown model|模型不存在|找不到模型/iu;
++/** Key complaints and region blocks keep their own codes. */
++const NOT_MODEL_ACCESS = /invalid[ _-]?api[ _-]?key|incorrect api key|api key (?:is )?(?:not valid|invalid)|invalid (?:authentication|token)|authentication fails|令牌已过期|鉴权失败|密钥无效|api key 无效|unsupported_country|country|region|territory|地区/iu;
++/**
++* DSH-Android (patch 18). An HTTP 4xx (not 401 / 402 / 429) whose text says the model is not
++* activated for the account, or (on a 403, or without "does not exist" wording) that access is
++* denied. Before this, a 403 of that kind was AUTH and the user was told the key was wrong.
++*/
++function isModelUnavailable(detail, status) {
++	if (status === void 0 || status < 400 || status >= 500 || status === 401 || status === 402 || status === 429) return false;
++	if (NOT_MODEL_ACCESS.test(detail)) return false;
++	if (MODEL_NOT_ACTIVATED.test(detail)) return true;
++	if (!MODEL_ACCESS_DENIED.test(detail)) return false;
++	return status === 403 || !MODEL_MISSING.test(detail);
++}
++/** DSH-Android (patch 18). `llm-service-lite: model "<id>" is not available to this account: <server text>`. */
++function modelUnavailableMessage(model, serverMessage) {
++	const own = redactUrls(String(serverMessage)).replace(/\s+/gu, " ").trim().slice(0, 500);
++	const who = typeof model === "string" && model !== "" ? `model "${model}"` : "the model";
++	return `llm-service-lite: ${who} is not available to this account: ${own}`;
++}
++/** DSH-Android (patch 18). An RFC 9110 field name. */
++function isHeaderName(name) {
++	return typeof name === "string" && /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u.test(name);
++}
++/**
++* DSH-Android (patch 18). The opaque value of a route's session header: the first 32 hex digits of
++* sha256 over a fixed tag, the route and the harness session id (stable for one session, unlinkable
++* to the session id, different per route); a fresh random id when the request belongs to no session.
++*/
++function sessionToken(route, sessionId) {
++	if (sessionId === void 0 || sessionId === null || String(sessionId) === "") return randomUUID().replaceAll("-", "");
++	return createHash("sha256").update(`dsh-android/session-header/v1\0${route}\0${String(sessionId)}`).digest("hex").slice(0, 32);
++}
++/**
++* DSH-Android (patch 18). Final request headers of one model call: the transport's headers
++* (lower-cased; a declared header replaces the harness default of the same name, case-insensitively),
++* the route's secret headers (never replacing the credential's own authorization / x-api-key), the
++* route's User-Agent product token in front of the harness one (unless a header declares its own),
++* and the session header.
++*/
++function routeHeaders(headers, profile, sessionId, secretHeaders = {}) {
++	const out = {};
++	for (const [name, value] of Object.entries(headers)) out[name.toLowerCase()] = value;
++	let declaredAgent = Object.keys(profile.headers ?? {}).some((name) => name.toLowerCase() === "user-agent");
++	for (const [name, value] of Object.entries(secretHeaders)) {
++		const key = name.toLowerCase();
++		if ((key === "authorization" || key === "x-api-key") && out[key] !== void 0) continue;
++		if (key === "user-agent") declaredAgent = true;
++		out[key] = value;
++	}
++	if (!declaredAgent && profile.userAgent !== void 0) out["user-agent"] = `${profile.userAgent} ${out["user-agent"] ?? ""}`.trim();
++	if (profile.sessionHeader !== void 0) out[profile.sessionHeader.toLowerCase()] = sessionToken(profile.provider, sessionId);
++	return out;
++}
+ /**
+ * DSH-Android (patch 16). A 404 names its status and, when the base URL is a bare origin, the
+ * missing version segment: `https://integrate.api.nvidia.com` + `/chat/completions` is a 404,
+@@ -5247,6 +5341,8 @@
+ 		signal.throwIfAborted();
+ 		const model = modelOf(profile, options.model);
+ 		const apiKey = await this.dependencies.resolveApiKey(profile);
++		// DSH-Android (patch 18): secret headers resolve per request, like the key.
++		const secretHeaders = await (this.dependencies.resolveHeaders?.(profile) ?? {});
+ 		const versions = await prepareRequestImages(model, options.messages, this.dependencies.resolveAttachments?.(), profile.imageRequestBudget, signal);
+ 		signal.throwIfAborted();
+ 		const transport = TRANSPORTS[profile.interfaceType];
+@@ -5256,6 +5352,7 @@
+ 		let response;
+ 		for (let attempt = 0;; attempt += 1) {
+ 			request = transport.request(profile, model, options, apiKey, versions);
++			request.headers = routeHeaders(request.headers, profile, options.sessionId, secretHeaders);
+ 			response = await fetch(request.url, {
+ 				method: "POST",
+ 				headers: request.headers,
+@@ -5277,8 +5374,8 @@
+ 				raw = { message: text.slice(0, 2e3) };
+ 			}
+ 			if (typeof raw === "string") raw = { message: raw.slice(0, 2e3) };
+-			if (response.status === 404) raw = { message: notFoundMessage(errorMessage(raw, 404), profile.baseURL) };
+-			throw classifyFailure(raw, response.status, response.headers);
++			if (response.status === 404 && !isModelUnavailable(errorDetail(raw), 404)) raw = { message: notFoundMessage(errorMessage(raw, 404), profile.baseURL) };
++			throw classifyFailure(raw, response.status, response.headers, options.model);
+ 		}
+ 		if (response.body === null) throw new LlmError(`llm-service-lite: provider "${profile.provider}" returned no response body`, "EMPTY_RESPONSE");
+ 		const context = { endpoint: endpointKey(profile.baseURL) };
+@@ -5406,7 +5503,7 @@
+ * @param configured - static headers configured on the route.
+ * @returns the request headers.
+ */
+-function listingHeaders(interfaceType, apiKey, configured) {
++function listingHeaders(interfaceType, apiKey, configured, route = {}) {
+ 	const headers = new Headers(configured === void 0 ? void 0 : Object.entries(configured));
+ 	headers.set("accept", "application/json");
+ 	if (interfaceType === "anthropic-messages") {
+@@ -5414,6 +5511,9 @@
+ 		if (apiKey !== void 0 && apiKey.length > 0) headers.set("x-api-key", apiKey);
+ 	} else if (apiKey !== void 0 && apiKey.length > 0) headers.set("authorization", `Bearer ${apiKey}`);
+ 	for (const [name, value] of Object.entries(attributionHeaders())) headers.set(name, value);
++	// DSH-Android (patch 18): the route's User-Agent token and a fresh session id (a listing belongs to no session).
++	if (route.userAgent !== void 0) headers.set("user-agent", `${route.userAgent} ${headers.get("user-agent") ?? ""}`.trim());
++	if (route.sessionHeader !== void 0) headers.set(route.sessionHeader, sessionToken(route.provider ?? "", void 0));
+ 	return headers;
+ }
+ /** The refusal for a listing body that outgrows the ceiling. */
+@@ -5485,7 +5585,7 @@
+ 	try {
+ 		response = await fetch(url, {
+ 			method: "GET",
+-			headers: listingHeaders(interfaceType, apiKey, options.headers),
++			headers: listingHeaders(interfaceType, apiKey, options.headers, options.route),
+ 			signal: fused,
+ 			redirect: "error"
+ 		});
+@@ -5814,6 +5914,20 @@
+ 		throw new LlmError(`llm-service-lite: no credential for provider route "${profile.provider}"; its profile resolves ${ref}, which is not set — store ${ref} through the credentials service or export it`, "MISSING_CREDENTIAL");
+ 	};
+ 	/**
++	* DSH-Android (patch 18). A route's secret headers (`headerEnv`), resolved like its key; a
++	* named reference that resolves to nothing fails the request rather than sending it without.
++	*/
++	const resolveHeaders = async (profile) => {
++		const out = {};
++		for (const [header, ref] of Object.entries(profile.headerEnv ?? {})) {
++			const credentials = ctx.get("credentials");
++			const hit = credentials !== void 0 ? (await credentials.resolve(ref))?.value : launchEnvironmentOf(ctx).get(ref)?.value;
++			if (hit === void 0 || hit.length === 0) throw new LlmError(`llm-service-lite: no value for header "${header}" of provider route "${profile.provider}"; its profile resolves ${ref}, which is not set`, "MISSING_CREDENTIAL");
++			out[header] = hit;
++		}
++		return out;
++	};
++	/**
+ 	* One admission limiter per route. The limiter is re-tuned in place rather
+ 	* than replaced: it carries the FIFO queue of requests already waiting, so
+ 	* rebuilding it would split that queue across two instances and let the old
+@@ -5835,6 +5949,7 @@
+ 		profiles,
+ 		limiter: limiterFor,
+ 		resolveApiKey,
++		resolveHeaders,
+ 		resolveAttachments: () => ctx.get("attachments")
+ 	});
+ 	let directory;
+@@ -5900,9 +6015,11 @@
+ 		const api = request.api ?? stored?.interfaceType;
+ 		const options = {
+ 			...api === void 0 ? {} : { api },
+-			...stored === void 0 ? {} : { headers: stored.headers }
++			...stored === void 0 ? {} : { headers: stored.headers },
++			// DSH-Android (patch 18)
++			...stored === void 0 ? {} : { route: { provider: stored.provider, userAgent: stored.userAgent, sessionHeader: stored.sessionHeader } }
+ 		};
+-		const discover = (apiKey) => discoverEndpointModels(baseURL, apiKey, signal, options);
++		const discover = (apiKey) => (stored === void 0 ? Promise.resolve({}) : resolveHeaders(stored)).then((secret) => discoverEndpointModels(baseURL, apiKey, signal, { ...options, headers: { ...options.headers, ...secret } }));
+ 		if (request.apiKey !== void 0) return discover(assertUsableApiKey(request.apiKey, name, "request.apiKey"));
+ 		if (stored === void 0) return discover(void 0);
+ 		return resolveApiKey(stored).then(discover);
+@@ -6005,4 +6122,4 @@
+ 	});
+ }
+ //#endregion
+-export { ConcurrencyLimiter, Config, DISCOVERY_MAX_RESPONSE_BYTES, LISTABLE_INTERFACE_TYPES, OwcProfilesAdapter, apply, classifyTransport, convertOfficialProvider, describeTransportCause, discoverEndpointModels, inject, modelOf, name, notFoundMessage, resolveProfiles };
++export { ConcurrencyLimiter, Config, DISCOVERY_MAX_RESPONSE_BYTES, MODEL_NOT_AVAILABLE_CODE, isModelUnavailable, routeHeaders, sessionToken, LISTABLE_INTERFACE_TYPES, OwcProfilesAdapter, apply, classifyTransport, convertOfficialProvider, describeTransportCause, discoverEndpointModels, inject, modelOf, name, notFoundMessage, resolveProfiles };

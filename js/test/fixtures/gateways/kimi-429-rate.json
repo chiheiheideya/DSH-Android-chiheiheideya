@@ -1,0 +1,6 @@
+{
+  "error": {
+    "message": "Your account org-scrubbed <ak-scrubbed> request reached organization max RPM: 3, please try again after 20 seconds",
+    "type": "rate_limit_reached_error"
+  }
+}

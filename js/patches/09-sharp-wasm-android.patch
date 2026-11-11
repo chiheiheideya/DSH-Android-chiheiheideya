@@ -1,0 +1,15 @@
+--- a/sharp/dist/sharp.cjs
++++ b/sharp/dist/sharp.cjs
+@@ -82,6 +82,12 @@
+       case "linux-wasm32":
+         sharp = require("@img/sharp-webcontainers-wasm32/sharp.node");
+         break;
++      // DSH-Android: no native libvips build for bionic; the engine ships the
++      // platform-neutral WebAssembly build (packaged as sharp-freebsd-wasm32).
++      case "android-arm64":
++      case "android-x64":
++        sharp = require("@img/sharp-freebsd-wasm32/sharp.node");
++        break;
+     }
+     if (sharp && ["linux-x64", "linuxmusl-x64"].includes(runtimePlatform) && !sharp._isUsingX64V2()) {
+       const err = new Error("Prebuilt binaries for Linux x64 require v2 microarchitecture");

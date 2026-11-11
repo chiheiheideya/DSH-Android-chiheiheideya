@@ -1,0 +1,17 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/guides/error-codes",
+  "model": "gpt-9",
+  "http": {
+    "status": 404,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 404,
+      "messageIncludes": "does not exist or you do not have access"
+    }
+  },
+  "body": "openai-404-model.json"
+}

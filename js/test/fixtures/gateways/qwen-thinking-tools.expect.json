@@ -1,0 +1,38 @@
+{
+  "provider": "Alibaba DashScope compatible-mode (dashscope.aliyuncs.com/compatible-mode/v1)",
+  "source": "from docs: help.aliyun.com/zh/model-studio deep-thinking + function calling (enable_thinking, reasoning_content, continuation fragments carry id \"\")",
+  "model": "qwen-plus",
+  "basePath": "/compatible-mode/v1",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream;charset=UTF-8"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "call_scrubbed09"
+      }
+    ],
+    "usage": {
+      "inputTokens": 260,
+      "outputTokens": 61,
+      "totalTokens": 321,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_content"
+    ]
+  },
+  "echo": {
+    "reasoning_content": "The user wants the weather in Paris. I should call get_weather."
+  },
+  "body": "qwen-thinking-tools.sse"
+}

@@ -1,0 +1,4 @@
+data: {"id":"q","object":"chat.completion.chunk","created":1793380000,"model":"some-gateway-model","choices":[{"index":0,"delta":{"content":"done"},"finish_reason":null}]}
+
+data: {"id":"q","object":"chat.completion.chunk","created":1793380000,"model":"some-gateway-model","choices":[{"index":0,"delta":{},"finish_reason":"eos"}]}
+

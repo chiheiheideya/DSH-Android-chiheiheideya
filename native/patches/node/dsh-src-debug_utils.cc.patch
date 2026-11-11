@@ -1,0 +1,15 @@
+Adapted from Termux src-debug_utils.cc.patch: on Android node writes its own
+stderr diagnostics to logcat. DSH-Android redirects fd 2 itself, so keep
+writing to the fd unless NODE_ANDROID_LOG_STDERR_TO_LOGCAT is defined.
+
+--- a/src/debug_utils.cc	2026-10-27 15:30:25.118536311 -0400
++++ b/src/debug_utils.cc	2026-10-27 15:30:25.122536323 -0400
+@@ -530,7 +530,7 @@
+ 
+   WriteConsoleW(handle, wbuf.data(), n, nullptr, nullptr);
+   return;
+-#elif defined(__ANDROID__)
++#elif defined(__ANDROID__) && defined(NODE_ANDROID_LOG_STDERR_TO_LOGCAT)
+   if (file == stderr) {
+     __android_log_print(ANDROID_LOG_ERROR, "nodejs", "%s", str.data());
+     return;

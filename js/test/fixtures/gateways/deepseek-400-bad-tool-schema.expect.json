@@ -1,0 +1,8 @@
+{
+  "provider": "DeepSeek official (api.deepseek.com/v1)",
+  "source": "live capture 2026-10-30, tool name outside ^[a-zA-Z0-9_-]+$; request id scrubbed",
+  "body": "deepseek-400-bad-tool-schema.json",
+  "model": "deepseek-flash",
+  "http": { "status": 400, "contentType": "application/json" },
+  "expect": { "error": { "code": "INVALID_REQUEST", "status": 400, "messageIncludes": "tools[0].function.name" } }
+}

@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "model requires more system memory (12.0 GiB) than is available (6.1 GiB)",
+    "type": "api_error",
+    "param": null,
+    "code": null
+  }
+}

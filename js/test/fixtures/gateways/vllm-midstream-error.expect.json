@@ -1,0 +1,16 @@
+{
+  "provider": "vLLM (OpenAI-compatible server)",
+  "source": "from docs: vLLM serving_chat streams an in-band `data: {\"error\": …}` frame when generation fails mid-stream",
+  "model": "Qwen/Qwen3-8B",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "error": {
+      "code": "SERVER",
+      "messageIncludes": "CUDA out of memory"
+    }
+  },
+  "body": "vllm-midstream-error.sse"
+}

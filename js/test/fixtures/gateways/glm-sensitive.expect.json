@@ -1,0 +1,22 @@
+{
+  "provider": "Zhipu GLM (open.bigmodel.cn/api/paas/v4)",
+  "source": "from docs: docs.bigmodel.cn (finish_reason \"sensitive\": output blocked by the content filter)",
+  "model": "glm-4.6",
+  "basePath": "/api/paas/v4",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "I can",
+    "usage": {
+      "inputTokens": 20,
+      "outputTokens": 2,
+      "totalTokens": 22,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "stop"
+  },
+  "body": "glm-sensitive.sse"
+}

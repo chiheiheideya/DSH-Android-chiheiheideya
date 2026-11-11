@@ -1,0 +1,17 @@
+{
+  "provider": "OpenRouter (openrouter.ai/api/v1)",
+  "source": "from docs: openrouter.ai/docs/api-reference/errors ({\"error\":{\"code\": <int>, \"message\", \"metadata\"?}})",
+  "model": "anthropic/claude-sonnet-4.5",
+  "http": {
+    "status": 401,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "AUTH",
+      "status": 401,
+      "messageIncludes": "No auth credentials found"
+    }
+  },
+  "body": "openrouter-401.json"
+}

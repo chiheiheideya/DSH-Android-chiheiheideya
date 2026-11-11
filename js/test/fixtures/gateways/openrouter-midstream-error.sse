@@ -1,0 +1,6 @@
+: OPENROUTER PROCESSING
+
+data: {"id":"gen-scrubbed2","provider":"Chutes","model":"deepseek/deepseek-r1-0528","object":"chat.completion.chunk","created":1793380000,"choices":[{"index":0,"delta":{"role":"assistant","content":"Par"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-scrubbed3","object":"chat.completion.chunk","created":1793380000,"model":"deepseek/deepseek-r1-0528","provider":"Chutes","error":{"code":"server_error","message":"Provider disconnected unexpectedly"},"choices":[{"index":0,"delta":{"content":""},"finish_reason":"error"}]}
+

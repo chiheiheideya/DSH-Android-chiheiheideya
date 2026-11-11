@@ -1,0 +1,20 @@
+--- a/@deepseek-ai/dsh-attachment-local/lib/index.js
++++ b/@deepseek-ai/dsh-attachment-local/lib/index.js
+@@ -388,7 +388,16 @@
+ 	/* v8 ignore next -- Windows cannot open directory handles; NTFS metadata journaling owns entry durability there. */
+ 	if (process.platform === "win32") return;
+ 	/* v8 ignore start -- Windows cannot exercise directory fsync; POSIX behavior tests enforce this peer. */
+-	const handle = await open(path, constants.O_RDONLY);
++	let handle;
++	try {
++		handle = await open(path, constants.O_RDONLY);
++	} catch (error) {
++		// DSH-Android: ancestors above the app sandbox (`/data/user/0` is 0771 system:system) cannot
++		// be opened by the app uid. They are system-owned and already durable, so skip them instead
++		// of failing every image attachment with EACCES.
++		if (process.platform === "android" && (error?.code === "EACCES" || error?.code === "EPERM")) return;
++		throw error;
++	}
+ 	try {
+ 		await handle.sync();
+ 	} finally {

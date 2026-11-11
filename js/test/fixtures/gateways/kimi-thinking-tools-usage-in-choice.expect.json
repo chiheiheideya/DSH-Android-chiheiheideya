@@ -1,0 +1,37 @@
+{
+  "provider": "Moonshot Kimi (api.moonshot.cn/v1)",
+  "source": "from docs: platform.moonshot.cn/docs (streaming usage is reported inside the final choice, cache hits as usage.cached_tokens; tool call ids `functions.<name>:<n>`; kimi-k2-thinking requires reasoning_content kept on tool-call turns)",
+  "model": "kimi-k2-thinking",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "functions.get_weather:0"
+      }
+    ],
+    "usage": {
+      "inputTokens": 144,
+      "outputTokens": 80,
+      "totalTokens": 480,
+      "cacheReadTokens": 256,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_content"
+    ]
+  },
+  "echo": {
+    "reasoning_content": "The user wants the weather in Paris. I should call get_weather."
+  },
+  "body": "kimi-thinking-tools-usage-in-choice.sse"
+}

@@ -1,0 +1,17 @@
+{
+  "provider": "vLLM (OpenAI-compatible server)",
+  "source": "from docs: vLLM ErrorResponse ({\"object\":\"error\",\"message\",\"type\",\"param\",\"code\": <int>})",
+  "model": "Qwen/Qwen3-8B",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 400,
+      "messageIncludes": "--enable-auto-tool-choice"
+    }
+  },
+  "body": "vllm-400-tools-unsupported.json"
+}

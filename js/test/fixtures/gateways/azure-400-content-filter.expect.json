@@ -1,0 +1,18 @@
+{
+  "provider": "Azure OpenAI (<resource>.openai.azure.com/openai/v1)",
+  "source": "from docs: learn.microsoft.com/azure/ai-foundry/openai/reference (error envelope with innererror)",
+  "model": "gpt-4o",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "basePath": "/openai/v1",
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 400,
+      "messageIncludes": "content management policy"
+    }
+  },
+  "body": "azure-400-content-filter.json"
+}

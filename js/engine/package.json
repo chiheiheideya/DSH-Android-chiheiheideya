@@ -1,0 +1,15 @@
+{
+  "name": "dsh-android-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "npm project whose production install is the DSH-Android engine tree (dsh pinned exactly).",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.2.1-rc.5",
+    "pnpm": "11.28.9"
+  },
+  "overrides": {
+    "zod": "4.4.3"
+  },
+  "//overrides": "dsh pins zod 4.4.3 exactly in ~60 packages; without this npm hoists a newer zod and nests 50 copies of 4.4.3 (~250 MiB). 4.4.3 satisfies every other range in the tree.",
+  "//pnpm": "pnpm 11 (same major as the dsh desktop carrier) runs dsh's plugin manager on the phone: node_modules/pnpm/bin/pnpm.mjs on the node launcher (libdshnode.so). Pinned exactly; the lockfile carries its sha512. build-engine.sh prunes node-gyp, the reflink binaries and Windows helpers."
+}

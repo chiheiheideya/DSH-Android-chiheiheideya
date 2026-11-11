@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "该模型未开通，请先在百炼控制台开通模型服务",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "Model.NotActivated"
+  }
+}

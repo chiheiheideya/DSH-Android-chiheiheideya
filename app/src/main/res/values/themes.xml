@@ -1,0 +1,16 @@
+<resources>
+    <style name="Theme.Dsh" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+    <style name="Theme.Dsh.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launcher_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_fg</item>
+        <item name="postSplashScreenTheme">@style/Theme.Dsh</item>
+    </style>
+    <style name="Theme.Dsh.Quick" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

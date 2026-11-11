@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Per-app language: Android 13+ Settings → App languages and 设置 → 通用 → 语言 (AppLanguage) both list these.
+     values/ is zh (the default), values-en is en. A new language: values-xx/strings*.xml plus one line here
+     (LocalesConfigTest checks the two agree). -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="zh" />
+    <locale android:name="en" />
+    <locale android:name="ru" />
+</locale-config>

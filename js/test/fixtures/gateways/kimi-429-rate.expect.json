@@ -1,0 +1,16 @@
+{
+  "provider": "Moonshot Kimi (api.moonshot.cn/v1)",
+  "source": "from docs: platform.moonshot.cn/docs/api/errors",
+  "model": "kimi-k2-thinking",
+  "http": {
+    "status": 429,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "RATE_LIMIT",
+      "status": 429
+    }
+  },
+  "body": "kimi-429-rate.json"
+}

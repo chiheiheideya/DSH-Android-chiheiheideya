@@ -1,0 +1,17 @@
+{
+  "provider": "SiliconFlow (api.siliconflow.cn/v1)",
+  "source": "from docs: docs.siliconflow.cn error codes ({\"code\": <int>, \"message\", \"data\"}; 401 body is a bare JSON string)",
+  "model": "deepseek-ai/DeepSeek-R1",
+  "http": {
+    "status": 401,
+    "contentType": "text/plain"
+  },
+  "expect": {
+    "error": {
+      "code": "AUTH",
+      "status": 401,
+      "messageIncludes": "Invalid token"
+    }
+  },
+  "body": "siliconflow-401.txt"
+}

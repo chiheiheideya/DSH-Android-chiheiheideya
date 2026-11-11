@@ -1,0 +1,12 @@
+{
+  "provider": "DeepSeek official (api.deepseek.com/v1)",
+  "source": "live capture 2026-10-30, deepseek-flash, the follow-up after the tool call with reasoning_content echoed (cache hit 256); ids scrubbed",
+  "body": "deepseek-thinking-followup.sse",
+  "model": "deepseek-flash",
+  "http": { "status": 200, "contentType": "text/event-stream; charset=utf-8" },
+  "expect": {
+    "text": "It's currently **18°C** in Paris, with cloudy skies.",
+    "usage": { "inputTokens": 157, "outputTokens": 16, "totalTokens": 429, "cacheReadTokens": 256, "cacheWriteTokens": 0 },
+    "finish": "stop"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "provider": "magpie-style local gateway (127.0.0.1:3425/v1, translating an Anthropic upstream)",
+  "source": "from docs (synthetic): gateway rejecting a wrong local gateway key",
+  "model": "claude-sonnet-4-5",
+  "http": {
+    "status": 401,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "AUTH",
+      "status": 401
+    }
+  },
+  "body": "magpie-401-gateway-key.json"
+}

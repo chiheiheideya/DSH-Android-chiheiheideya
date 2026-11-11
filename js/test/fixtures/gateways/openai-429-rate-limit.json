@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Rate limit reached for gpt-4.1 in organization org-scrubbed on tokens per min (TPM): Limit 30000, Used 29000, Requested 1500. Please try again in 2s.",
+    "type": "tokens",
+    "param": null,
+    "code": "rate_limit_exceeded"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "provider": "generic OpenAI-compatible gateway quirk",
+  "source": "from docs: non-standard finish_reason (\"eos\") and no [DONE] sentinel",
+  "model": "some-gateway-model",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "done",
+    "finish": "stop"
+  },
+  "body": "quirk-unknown-finish-reason.sse"
+}

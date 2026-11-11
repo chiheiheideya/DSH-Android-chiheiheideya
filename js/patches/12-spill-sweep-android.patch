@@ -1,0 +1,13 @@
+--- a/@deepseek-ai/dsh-spill-local/lib/index.js
++++ b/@deepseek-ai/dsh-spill-local/lib/index.js
+@@ -154,6 +154,10 @@
+ async function hasProtectedAncestors(path) {
+ 	/* v8 ignore next -- POSIX ancestry checks have no Windows ACL equivalent. */
+ 	if (process.platform === "win32" || process.geteuid === void 0) return true;
++	// DSH-Android: `/data` is 0771 system:system, so no app path ever passes this walk and the
++	// startup sweep would never reclaim old spill roots. The app's data dir is reachable only by
++	// its own uid (per-app sandbox), so the root's own ownership/mode check is enough there.
++	if (process.platform === "android") return true;
+ 	/* v8 ignore start -- Windows takes the return above; POSIX tests exercise
+ 	the ancestor ownership and mode policy. */
+ 	const currentUid = process.geteuid();

@@ -1,0 +1,68 @@
+{
+  "format": 1,
+  "title": { "en": "DSH-Android picks", "zh": "DSH-Android 精选" },
+  "description": {
+    "en": "Pure-JavaScript DSH plugins that need no native modules and no DSH web services. Not yet tested on a phone unless labelled.",
+    "zh": "不依赖原生模块、也不需要 DSH 网页版服务的纯 JS 插件。没有「手机实测」标签的还没在真机上测过。"
+  },
+  "metadata": {
+    "categories": {
+      "search": { "title": { "en": "Search & web", "zh": "搜索与网页" } },
+      "knowledge": { "title": { "en": "Knowledge & skills", "zh": "知识与技能" } }
+    },
+    "labels": {
+      "phone-tested": { "title": { "en": "Phone tested", "zh": "手机实测" } }
+    }
+  },
+  "plugins": [
+    {
+      "name": "@fffangchenghao/dsh-web-search",
+      "title": { "en": "Web search (Bing)", "zh": "网页搜索（Bing）" },
+      "description": {
+        "en": "Key-free web search and page fetch: Bing and AnySearch engines, vertical sources, arXiv lookups and cited research.",
+        "zh": "免密钥的网页搜索与网页抓取：Bing、AnySearch 等搜索引擎，垂直站点、arXiv 文献查询和带引用的研究。"
+      },
+      "author": "fangchenghao",
+      "homepage": "https://github.com/fangchenghao/dsh-web-search#readme",
+      "repository": { "url": "https://github.com/fangchenghao/dsh-web-search" },
+      "metadata": {
+        "category": "search",
+        "labels": [],
+        "keywords": ["web-search", "web-fetch", "search", "bing", "research", "搜索"]
+      },
+      "dist-tags": { "latest": "0.24.0" },
+      "versions": [
+        {
+          "version": "0.24.0",
+          "publishTimestamp": 1793031711,
+          "source": { "type": "npm" },
+          "engines": { "dsh": ">=0.2.1-rc.2 <0.3.0" }
+        }
+      ]
+    },
+    {
+      "name": "dsh-plugin-guide",
+      "title": "dsh-plugin-guide",
+      "description": {
+        "en": "DSH plugin development as an on-demand agent skill: official docs mirror, contract rules, migration guide and a verified issue index.",
+        "zh": "把 DSH 插件开发知识做成按需加载的技能：官方文档副本、契约规则、迁移指南和核实过的问题索引。"
+      },
+      "icon": "https://cdn.jsdelivr.net/npm/dsh-plugin-guide@0.3.39/icon.svg",
+      "repository": { "url": "https://github.com/PerryLink/dsh-plugin-guide" },
+      "metadata": {
+        "category": "knowledge",
+        "labels": [],
+        "keywords": ["dsh-skill", "plugin-development", "documentation", "技能"]
+      },
+      "dist-tags": { "latest": "0.3.39" },
+      "versions": [
+        {
+          "version": "0.3.39",
+          "publishTimestamp": 1792407891,
+          "source": { "type": "npm" },
+          "engines": { "dsh": ">=0.2.1-0 <0.3.0" }
+        }
+      ]
+    }
+  ]
+}

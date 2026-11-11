@@ -1,0 +1,39 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/api-reference/chat-streaming (chat.completion.chunk; stream_options.include_usage: usage null on every chunk, a last chunk with choices [] and usage; obfuscation field; parallel tool calls with id/name only in their first fragment)",
+  "model": "gpt-4.1",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "call_aaa"
+      },
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Tokyo"
+        },
+        "id": "call_bbb"
+      }
+    ],
+    "usage": {
+      "inputTokens": 16,
+      "outputTokens": 40,
+      "totalTokens": 120,
+      "cacheReadTokens": 64,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": []
+  },
+  "body": "openai-include-usage-parallel-tools.sse"
+}

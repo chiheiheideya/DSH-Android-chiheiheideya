@@ -1,0 +1,18 @@
+{
+  "provider": "NVIDIA NIM (integrate.api.nvidia.com/v1)",
+  "source": "from docs: issue #28 (base URL https://integrate.api.nvidia.com without /v1 answers 404 with an empty body)",
+  "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+  "http": {
+    "status": 404,
+    "contentType": "text/plain"
+  },
+  "basePath": "",
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 404,
+      "messageIncludes": "usually live under /v1"
+    }
+  },
+  "body": "nim-404-bare-origin.txt"
+}

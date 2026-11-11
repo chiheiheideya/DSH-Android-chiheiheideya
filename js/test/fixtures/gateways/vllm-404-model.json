@@ -1,0 +1,7 @@
+{
+  "object": "error",
+  "message": "The model `foo` does not exist.",
+  "type": "NotFoundError",
+  "param": null,
+  "code": 404
+}

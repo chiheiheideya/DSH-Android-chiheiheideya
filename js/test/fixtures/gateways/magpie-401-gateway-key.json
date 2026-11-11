@@ -1,0 +1,6 @@
+{
+  "error": {
+    "message": "invalid gateway key",
+    "type": "authentication_error"
+  }
+}

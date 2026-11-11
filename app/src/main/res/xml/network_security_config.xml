@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext is permitted: users may point a model service at an http:// gateway on their own LAN
+     (#5), whose address is not known in advance; the settings page warns when http is used.
+     The engine's loopback sign-in callback (http://127.0.0.1:<port>/oauth/callback) also needs it. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

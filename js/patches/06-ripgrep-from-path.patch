@@ -1,0 +1,21 @@
+--- a/@deepseek-ai/dsh-tool-fs-search/lib/index.js
++++ b/@deepseek-ai/dsh-tool-fs-search/lib/index.js
+@@ -122,7 +122,17 @@
+ 		const executable = parse(process.execPath);
+ 		const executableSidecar = process.platform === "win32" ? join(executable.dir, `${executable.name}-rg.exe`) : `${process.execPath}-rg`;
+ 		if ("pkg" in process && existsSync(executableSidecar)) return executableSidecar;
+-		const dependency = (await import("@vscode/ripgrep")).rgPath;
++		// DSH-Android: @vscode/ripgrep has no android build (and its binaries are pruned
++		// from the engine); use DSH_RG_PATH or `rg` from PATH (files/bin/rg -> librg.so).
++		if (process.env.DSH_RG_PATH) return process.env.DSH_RG_PATH;
++		if (process.platform === "android") return "rg";
++		let dependency;
++		try {
++			dependency = (await import("@vscode/ripgrep")).rgPath;
++		} catch {
++			return "rg";
++		}
++		if (!existsSync(dependency)) return "rg";
+ 		return process.versions.electron === void 0 ? dependency : dependency.replace(/\.asar(?=[\\/])/u, ".asar.unpacked");
+ 	});
+ 	return rgPathPromise;

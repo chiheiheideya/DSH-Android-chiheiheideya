@@ -1,0 +1,25 @@
+{
+  "provider": "Mistral (api.mistral.ai/v1)",
+  "source": "from docs: docs.mistral.ai/capabilities/reasoning (answer text also as a {\"type\":\"text\"} content chunk)",
+  "model": "magistral-medium-latest",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "Paris is mild today.",
+    "reasoning": "Answer briefly.",
+    "usage": {
+      "inputTokens": 10,
+      "outputTokens": 10,
+      "totalTokens": 20,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "stop",
+    "replayFields": [
+      "content"
+    ]
+  },
+  "body": "mistral-magistral-text.sse"
+}

@@ -1,0 +1,17 @@
+{
+  "provider": "LM Studio (http://localhost:1234/v1)",
+  "source": "from docs: LM Studio OpenAI-compat error envelope",
+  "model": "foo",
+  "http": {
+    "status": 404,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 404,
+      "messageIncludes": "not found"
+    }
+  },
+  "body": "lmstudio-404-model.json"
+}

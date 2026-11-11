@@ -1,0 +1,184 @@
+# DSH-Android profile layer. Applied after @deepseek-ai/dsh-base and
+# @deepseek-ai/dsh-sdk-app (see the `android` profile template); third-party
+# plugin bundles, the profile's cordis.patch.yml (written by dsh's plugin manager
+# and config editor), $DSH_HOME/cordis.patch.yml and the app's overlay
+# $DSH_HOME/android/app-layer.patch.yml (main.mjs passes it as --patch) apply on top.
+#
+# A patch replaces a row's whole `config`, so every config below is complete.
+
+# ── persona ────────────────────────────────────────────────────────────────
+- id: system-prompt
+  config:
+    personaPrefix: >-
+      You are DSH, an AI agent running on the user's own Android phone, powered
+      by the {{model}} model.
+
+      This is the 「chiheiheideya」 build of DSH-Android (build tag: chiheiheideya~),
+      assembled by the user from the open-source DeepSeek Harness. When someone
+      asks what this app is or who made it, answer that it is chiheiheideya's
+      DSH-Android build — not the official jackwener release — and mention its
+      version tag when useful. Other DSH builds' data may have been imported
+      into this one.
+
+      LANGUAGE (hard rule, overrides any habit picked up from earlier context):
+      write your internal reasoning / thinking in Simplified Chinese from the
+      first token, and answer in Simplified Chinese too. This applies to the
+      private chain-of-thought block, not only to the visible reply. Never
+      switch the thinking language to English just because the conversation,
+      tool output or code is in English. Only use another language when the user
+      explicitly asks for it in this turn.
+
+# ── workspace: the app-private home directory, never the process cwd ─────────
+# The JNI launcher does not chdir; HOME is <filesDir>/home (ENGINE-CONTRACT §1).
+- id: sandbox-policy
+  config:
+    # Android has no bwrap/landlock/seatbelt chain (sandbox-local would fail
+    # closed). Run unconfined; mutating tools are approval-gated instead
+    # (plugin-guard for shell/fs writes, plugin-device for device tools).
+    mode: danger-full-access
+    workspaceRoot: !!js "process.env.HOME || process.cwd()"
+
+- id: approval
+  config:
+    policy: ask
+
+- id: permission
+  config:
+    defaultPreset: android
+    presets:
+      android:
+        sandbox: danger-full-access
+        approval: ask
+        name: android
+        description: No OS sandbox on Android; every mutating action asks for approval.
+
+# ── plugins (ENGINE-CONTRACT §2.6, docs/PLUGINS-CONTRACT.md) ─────────────────
+# The phone side of extensions: android/ext/* SDK methods, the install gates (pnpmfile,
+# binary scan, service precheck), status, skills, MCP helpers, and the androidExtensions
+# service (mode category `extensions`, ask-before-call). It mounts dsh's own plugin manager
+# (pnpm = the bundled pnpm on the node launcher, see main.mjs) and plugin market as its
+# children on first use, so a boot pays nothing for them. dsh-base's own `plugin-manager`
+# row stays off (below), and so do its agent tools (`tool-plugin-manager`).
+- insert:
+    - id: android-extensions
+      name: '@dsh-android/plugin-extensions'
+
+# rc.5's official DeepSeek routes follow the account's `/models` listing and wait up to
+# 5 s for it on the first connect: a network round trip on every cold start. Wait 1 ms:
+# the first connect uses the built-in catalog, the listing loads in the background and
+# applies from then on.
+- id: llm-deepseek
+  config:
+    modelsTimeoutMs: 1
+- id: llm-deepseek-account
+  config:
+    modelsTimeoutMs: 1
+
+# The skill catalog (a user message in every conversation with skills on) lists name + one line
+# per skill; dsh allows 500 characters per description. 250 keeps the "use when …" part of
+# typical descriptions; the full SKILL.md loads with the `skill` tool (issue #36).
+- id: tool-skill
+  config:
+    catalogDescriptionMaxLength: 250
+
+# ── rows a phone does not need ───────────────────────────────────────────────
+# Mounted on demand by android-extensions instead (see above).
+- id: plugin-manager
+  disabled: true
+# Telemetry export is off on the phone (privacy; no feedback UI wired to it).
+- id: session-telemetry-otel
+  disabled: true
+# Programmatic tool calling (code execution runtime + workflow tool built on it).
+- id: ptc-runtime
+  disabled: true
+- id: workflow-ptc
+  disabled: true
+- id: tool-workflow
+  disabled: true
+# Office skills / primary-runtime dependency tooling (desktop only; also gated by env).
+- id: skill-office
+  disabled: true
+- id: workspace-dependencies
+  disabled: true
+# Same-session goals (create_goal / update_goal, /goal, automatic goal rounds). A goal round is
+# a new turn started while the session is idle: on the phone each round ended the run in the app,
+# rounds never stopped by themselves (256 by default, also after a text-only answer), and any engine
+# restart (idle shutdown, crash recovery, route change) silently disarmed them; their prompt taught
+# the model to say the "next round" continues. Long tasks continue inside the turn instead, from
+# the todo list (plugin-guard continuation.js, #37). The `goal` domain stays for old sessions' logs.
+- id: tool-goal
+  disabled: true
+- id: goal-round-driver
+  disabled: true
+- id: command-goal
+  disabled: true
+# tmux context is meaningless on Android (no tmux).
+- id: tmux-context
+  disabled: true
+# Cold start: the OTel exporter stack (+ got) and the pi-ai multi-provider adapter (+ openai,
+# Anthropic, Google, Bedrock SDKs) were ~half of all modules loaded at boot (1002 → ~500).
+# Telemetry export is off on the phone. Third-party models go through the much lighter
+# llm-service-lite row below instead; build-engine.sh prunes the provider SDKs only pi-ai reaches.
+- id: otel
+  disabled: true
+- id: llm-pi-ai
+  disabled: true
+
+# ── rows dsh-base leaves to the Web presets ─────────────────────────────────
+# Current date/time/zone on each request (relative tasks: "alarm tomorrow 7:00", "SMS from the
+# last hour", rule_create epochs). The zone is the process zone: the app sets TZ /
+# DSH_ANDROID_TZ (android-env applies it); SDK prompts carry it as clientTimeZone (patch 11).
+- insert:
+    - id: time-context
+      name: '@deepseek-ai/dsh-time-context'
+      config:
+        refreshIntervalMs: 600000
+    # Structured clarifying questions (ask_user_question → user-question/ask, patch 08); the app
+    # shows tap-to-choose cards. Unattended runs get automatic "nobody is available" answers
+    # from plugin-guard.
+    - id: tool-ask-user
+      name: '@deepseek-ai/dsh-tool-ask-user'
+
+# ── third-party model providers ─────────────────────────────────────────────
+# @snnh/dsh-llm-service-lite (vendored, MIT): OpenAI-compatible endpoints with no vendor SDK.
+# Dormant (no route) until the app writes this row's `config.providers` into the user layer
+# $DSH_HOME/profiles/android/cordis.patch.yml (ENGINE-CONTRACT §1.1). Keys never appear there:
+# each provider names `apiKeyEnv: DSH_ANDROID_KEY_<ID>`, set in the engine's environment.
+# The row exists only here; the user layer replaces its `config` (patch layers never deep-merge).
+- insert:
+    - id: llm-service-lite
+      name: '@snnh/dsh-llm-service-lite'
+
+# ── DSH-Android plugins ────────────────────────────────────────────────────
+- insert:
+    - id: android-device
+      name: '@dsh-android/plugin-device'
+      # Per-tool timeouts come from each ToolDescriptor's timeoutMs (ENGINE-CONTRACT §3.1).
+
+    - id: android-guard
+      name: '@dsh-android/plugin-guard'
+      config:
+        locale: !!js "process.env.DSH_ANDROID_LOCALE || ''"
+        # Built-ins that mutate state outside the device bridge and therefore ask
+        # for approval (no OS sandbox on Android) — except read-only shell commands and
+        # write/edit inside HOME/TMPDIR, which plugin-guard allows directly.
+        askTools: [bash, write, edit]
+
+    # Session modes (ENGINE-CONTRACT §2.5): the app sends each conversation's mode with
+    # android/session/mode; the plugin hides the tools the mode leaves out (per agent,
+    # subagents follow their root), turns the skill catalog off, adds the mode's prompt.
+    - id: android-mode
+      name: '@dsh-android/plugin-mode'
+
+    # DeepSeek account login. dsh-base mounts the account provider
+    # (`deepseek-account`, OAuth + PKCE against platform.deepseek.com) and the
+    # `deepseek-account` model route; this row adds the loopback callback
+    # server they need and exposes the account operations and events on the
+    # SDK channel (account/* methods, account.* notifications).
+    - id: android-account
+      name: '@dsh-android/plugin-account'
+      config:
+        locale: !!js "process.env.DSH_ANDROID_LOCALE || ''"
+        # The completion page in the in-app sign-in WebView opens this app link.
+        appScheme: dsh-android-dev
+        appPackage: !!js "process.env.DSH_ANDROID_PACKAGE || ''"

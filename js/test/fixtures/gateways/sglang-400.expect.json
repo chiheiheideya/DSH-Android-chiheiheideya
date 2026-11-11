@@ -1,0 +1,17 @@
+{
+  "provider": "SGLang (OpenAI-compatible server)",
+  "source": "from docs: SGLang ErrorResponse (same envelope as vLLM)",
+  "model": "deepseek-ai/DeepSeek-R1",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 400,
+      "messageIncludes": "context length"
+    }
+  },
+  "body": "sglang-400.json"
+}

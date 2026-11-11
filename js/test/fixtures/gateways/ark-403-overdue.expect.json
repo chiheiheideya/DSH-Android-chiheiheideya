@@ -1,0 +1,17 @@
+{
+  "provider": "Volcano Engine Ark (ark.cn-beijing.volces.com/api/v3)",
+  "source": "from docs: volcengine.com/docs/82379/1299023 (Ark error codes: {\"error\":{\"code\",\"message\",\"param\",\"type\"}})",
+  "model": "doubao-seed-1-6-250615",
+  "http": {
+    "status": 403,
+    "contentType": "application/json"
+  },
+  "basePath": "/api/v3",
+  "expect": {
+    "error": {
+      "code": "QUOTA",
+      "status": 403
+    }
+  },
+  "body": "ark-403-overdue.json"
+}

@@ -1,0 +1,18 @@
+{
+  "provider": "Zhipu GLM (open.bigmodel.cn/api/paas/v4)",
+  "source": "from docs: docs.bigmodel.cn/api-reference/api-code (1220: 您无权访问{model}; HTTP status assumed 403)",
+  "model": "glm-4-plus",
+  "http": {
+    "status": 403,
+    "contentType": "application/json"
+  },
+  "basePath": "/api/paas/v4",
+  "expect": {
+    "error": {
+      "code": "MODEL_NOT_AVAILABLE",
+      "status": 403,
+      "messageIncludes": "您无权访问glm-4-plus"
+    }
+  },
+  "body": "glm-403-no-permission.json"
+}

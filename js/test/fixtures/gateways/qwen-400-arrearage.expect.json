@@ -1,0 +1,17 @@
+{
+  "provider": "Alibaba DashScope compatible-mode (dashscope.aliyuncs.com/compatible-mode/v1)",
+  "source": "from docs: help.aliyun.com/zh/model-studio/error-code",
+  "model": "qwen-plus",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "basePath": "/compatible-mode/v1",
+  "expect": {
+    "error": {
+      "code": "QUOTA",
+      "status": 400
+    }
+  },
+  "body": "qwen-400-arrearage.json"
+}

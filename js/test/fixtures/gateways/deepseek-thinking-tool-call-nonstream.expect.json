@@ -1,0 +1,16 @@
+{
+  "provider": "DeepSeek official (api.deepseek.com/v1)",
+  "source": "live capture 2026-10-30, deepseek-flash, stream:false (application/json completion: what a proxy that ignores stream:true returns); ids scrubbed",
+  "body": "deepseek-thinking-tool-call-nonstream.json",
+  "model": "deepseek-flash",
+  "http": { "status": 200, "contentType": "application/json" },
+  "expect": {
+    "text": "",
+    "reasoning": "The user asks for weather in Paris in celsius. Call tool.\n\nNote: the get_weather function signature has no unit param... but let's check. It has city and unit. Yes it does.",
+    "toolCalls": [{ "name": "get_weather", "arguments": { "city": "Paris", "unit": "c" }, "id": "call_00_scrubbed0001" }],
+    "usage": { "inputTokens": 191, "outputTokens": 96, "totalTokens": 415, "cacheReadTokens": 128, "cacheWriteTokens": 0 },
+    "finish": "tool-calls",
+    "replayFields": ["reasoning_content"]
+  },
+  "echo": { "reasoning_content": true, "absent": ["reasoning"] }
+}

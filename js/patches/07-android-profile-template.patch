@@ -1,0 +1,16 @@
+--- a/@deepseek-ai/dsh-app-boot/lib/index.js
++++ b/@deepseek-ai/dsh-app-boot/lib/index.js
+@@ -553,7 +553,12 @@
+ 	web: { bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"] },
+ 	headless: { bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-headless"] },
+ 	sdk: { bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-sdk-app"] },
+-	"sdk-minimal": { bundles: ["@deepseek-ai/dsh-sdk-minimal"] }
++	"sdk-minimal": { bundles: ["@deepseek-ai/dsh-sdk-minimal"] },
++	android: { bundles: [
++		"@deepseek-ai/dsh-base",
++		"@deepseek-ai/dsh-sdk-app",
++		"@dsh-android/bundle-android"
++	] }
+ };
+ /** Installation-owned bundle tuples normalized to the shipped template. */
+ const INSTALLATION_OWNED_PROFILE_TUPLES = { headless: [

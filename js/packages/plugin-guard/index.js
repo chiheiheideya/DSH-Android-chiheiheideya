@@ -1,0 +1,609 @@
+// @dsh-android/plugin-guard — policy floor for DSH-Android (ENGINE-CONTRACT §4):
+//  1. Hardline command floor for shell tools: blocked before approval and not
+//     overridable (a prepended `tools/pre-execute` deny plus a monotonic
+//     `ctx.tools.guard` backstop that no listener can bypass).
+//  2. Approvals. Android runs without an OS sandbox, so mutating built-ins ask;
+//     to keep friction low the guard auto-allows read-only shell commands and
+//     file writes inside the app's own HOME/TMPDIR, never asks for `sensitive`
+//     device reads in a conversation, applies the conversation's
+//     permission preset (`android/session/permission`, 仅可查看 refuses up front),
+//     and resolves every `ask` itself so a refusal tells the model why.
+//  3. Token / cost budgets from the bridge's `budget/update`, metered from the
+//     durable usage that dsh records on each assistant settlement (the same
+//     source dsh-token-meter folds); a turn over budget is refused at
+//     `agent/pre-step`.
+//  4. System-prompt section describing the phone context (lock-screen claims
+//     derived from the device tools' metadata), plus a runtime-context note for
+//     unattended automation runs (`auto_…` sessions), whose questions are
+//     answered automatically.
+//  5. dsh runtime warnings/errors (ctx.logger) mirrored to stderr = engine.log.
+//  6. Long tasks (continuation.js): a root turn the model ends with open todos (or a claim that it
+//     goes on by itself) continues with a nudge, capped; every turn end records its reason.
+//  7. Model reasoning levels for the app's composer (`android/models/reasoning`, #46): what dsh's
+//     llm runtime resolves for each third-party model, so the app offers only levels the route accepts.
+//  8. Per-conversation model (`android/session/model`, #53; session-model.js): each conversation's
+//     model route and reasoning level, installed on its root Agent (dsh's Agent-scoped selection).
+import { mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { basename, dirname, join, posix } from 'node:path'
+import { format } from 'node:util'
+import { checkCommand, isReadOnlyCommand, refusalText } from './hardline.js'
+import { setupExperience } from './experience.js'
+import { setupContinuation } from './continuation.js'
+import { setupSessionModel } from './session-model.js'
+import { setupSessionImport } from './session-import.js'
+
+export { checkCommand, isReadOnlyCommand, refusalText } from './hardline.js'
+
+export const name = 'android-guard'
+export const inject = ['tools']
+
+/** Shell-like tools whose `command` (or `text`) argument is checked. */
+const SHELL_TOOLS = new Map([
+  ['bash', 'command'], ['pwsh', 'command'], ['terminal_send', 'text'], ['terminal_open', 'command'],
+])
+/**
+ * Device tools that run a shell command line as the Android shell user (uid 2000, through Shizuku):
+ * the same hardline floor applies, judged from the directory they run in ("/", like `adb shell`)
+ * and with an unknown HOME treated as "/". They keep the device tool's risk-based approval.
+ */
+const DEVICE_SHELL_TOOLS = new Map([['adb_shell', 'command']])
+const DEVICE_SHELL_CWD = '/'
+/** Built-in file tools whose `file_path` may be auto-allowed inside the app's own directories. */
+const FILE_WRITE_TOOLS = new Set(['write', 'edit'])
+
+/** dsh / app permission presets (app PermissionPreset ids). */
+export const PRESETS = Object.freeze({ readOnly: 'read-only', ask: 'workspace-write', full: 'danger-full-access' })
+const PRESET_IDS = new Set(Object.values(PRESETS))
+const AUTO_PREFIX = 'auto_'
+
+/** Estimated CNY per 1M tokens; override with the `prices` config. */
+const DEFAULT_PRICES = { default: { input: 2, cacheRead: 0.2, output: 3 } }
+const LEDGER_VERSION = 2
+
+// SDK mode reserves stdout for JSON-RPC; plugin diagnostics go to stderr (the app logs it).
+function log(_ctx, level, message) {
+  process.stderr.write(`[android-guard] ${level === 'info' ? '' : level + ': '}${message}\n`)
+}
+
+function localDay(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/** The id the app knows for a (possibly subagent) session: its root. */
+function rootSessionId(ctx, agent) {
+  let session = agent?.session
+  if (session === undefined) return undefined
+  const seen = new Set()
+  while (session.header?.parentSession !== undefined && !seen.has(String(session.id))) {
+    seen.add(String(session.id))
+    const parentId = String(session.header.parentSession)
+    const parent = ctx.get('agents')?.list?.().find(a => String(a.session.id) === parentId)
+    if (parent === undefined) return parentId
+    session = parent.session
+  }
+  return String(session.id)
+}
+
+function rootOfSession(ctx, session) {
+  const agent = ctx.get('agents')?.list?.().find(a => a.session === session || String(a.session.id) === String(session.id))
+  if (agent !== undefined) return rootSessionId(ctx, agent)
+  return session.header?.parentSession !== undefined ? String(session.header.parentSession) : String(session.id)
+}
+
+function usageOf(event) {
+  if (event?.type !== 'assistant/message' && event?.type !== 'assistant/attempt') return undefined
+  const data = event.data ?? {}
+  if (data.usage !== undefined) return data.usage
+  const chunks = Array.isArray(data.stream) ? data.stream : Array.isArray(data.stream?.chunks) ? data.stream.chunks : []
+  for (let i = chunks.length - 1; i >= 0; i -= 1) {
+    const c = chunks[i]
+    if (c?.type === 'usage' && c.usage) return c.usage
+  }
+  return undefined
+}
+
+/** Persistent per-day and per-session usage tally ($DSH_HOME/android/budget.json). */
+class Ledger {
+  constructor(file) {
+    this.file = file
+    this.state = { v: LEDGER_VERSION, day: localDay(), dailyTokens: 0, dailyCostCny: 0, sessions: {} }
+    try {
+      const loaded = JSON.parse(readFileSync(file, 'utf8'))
+      if (loaded && typeof loaded === 'object') {
+        // v1 metered cache reads at full weight; its token tallies are not comparable (cost is).
+        const tokens = loaded.v === LEDGER_VERSION
+        const sessions = Object.fromEntries(Object.entries(loaded.sessions ?? {}).map(([id, e]) => [id, tokens ? e : { ...e, tokens: 0 }]))
+        this.state = { ...this.state, ...loaded, v: LEDGER_VERSION, dailyTokens: tokens ? loaded.dailyTokens ?? 0 : 0, sessions }
+      }
+    } catch {}
+    this.rollover()
+    this.timer = undefined
+  }
+
+  rollover() {
+    const today = localDay()
+    if (this.state.day !== today) {
+      this.state.day = today
+      this.state.dailyTokens = 0
+      this.state.dailyCostCny = 0
+    }
+  }
+
+  add(sessionId, tokens, costCny) {
+    this.rollover()
+    this.state.dailyTokens += tokens
+    this.state.dailyCostCny += costCny
+    const entry = this.state.sessions[sessionId] ?? { tokens: 0, costCny: 0, at: 0 }
+    entry.tokens += tokens
+    entry.costCny += costCny
+    entry.at = Date.now()
+    this.state.sessions[sessionId] = entry
+    const ids = Object.keys(this.state.sessions)
+    if (ids.length > 500) {
+      ids.sort((a, b) => this.state.sessions[a].at - this.state.sessions[b].at)
+      for (const id of ids.slice(0, ids.length - 500)) delete this.state.sessions[id]
+    }
+    this.scheduleSave()
+  }
+
+  session(sessionId) { return this.state.sessions[sessionId] ?? { tokens: 0, costCny: 0 } }
+
+  scheduleSave() {
+    if (this.timer !== undefined) return
+    this.timer = setTimeout(() => { this.timer = undefined; this.save() }, 1000)
+    this.timer.unref?.()
+  }
+
+  save() {
+    if (this.timer !== undefined) { clearTimeout(this.timer); this.timer = undefined }
+    try {
+      mkdirSync(dirname(this.file), { recursive: true })
+      const tmp = `${this.file}.${process.pid}.tmp`
+      writeFileSync(tmp, JSON.stringify(this.state))
+      renameSync(tmp, this.file)
+    } catch {}
+  }
+}
+
+
+// ── model-facing text ────────────────────────────────────────────────────────
+
+/** Groups whose tools drive the UI (always need the screen) — never examples of lock-free tools. */
+const UI_GROUPS = new Set(['screen', 'browser'])
+/** Common phone tasks, preferred as examples when the descriptor allows them. */
+const EXAMPLE_ORDER = ['alarm_set', 'volume_set', 'calendar_add', 'contacts_search', 'file_list', 'dnd_set', 'flashlight', 'wifi_toggle', 'media_control', 'rule_create']
+
+/** Up to `max` registered device tools that run while the phone is locked (needsUnlock:false), from metadata. */
+export function lockFreeExamples(descriptors, max = 5) {
+  const free = descriptors.filter(d => d.needsUnlock !== true && !UI_GROUPS.has(d.group) && d.risk !== 'dangerous' && !d.name.startsWith('file_')).map(d => d.name)
+  const ranked = [...EXAMPLE_ORDER.filter(n => free.includes(n)), ...free.filter(n => !EXAMPLE_ORDER.includes(n)).sort()]
+  return ranked.slice(0, max)
+}
+
+/** How to operate other apps' screens; only when the screen tools are registered. */
+export function screenSection(descriptors = []) {
+  if (!descriptors.some(d => d.group === 'screen')) return ''
+  const apps = descriptors.some(d => d.group === 'apps')
+  const where = apps
+    ? 'You work on your own background screen by default: app_launch / app_open_link open apps there and screen_* tools act there, so the user keeps using the phone.'
+    : 'Once this conversation has its own background screen, screen_* tools act there by default, so the user keeps using the phone.'
+  const guide = descriptors.some(d => d.name === 'app_guide')
+    ? 'The first time you enter an app DSH has a guide for, the guide (facts about its UI) is appended to that result; app_guide(app) looks one up at any time.'
+    : 'The first time you enter an app DSH has a guide for, the guide (facts about its UI) is appended to that result.'
+  const notes = descriptors.some(d => d.name === 'app_note')
+    ? '- App notes are UI facts earlier runs recorded on this phone; they are shown with the guide. After you find a non-obvious entry or hit a trap in an app, record ONE concise factual note with app_note (UI facts only: no personal data, nothing specific to this task). ' +
+      'When you used a note, confirm it if it held, update or remove it if it was wrong.\n'
+    : ''
+  const wheel = descriptors.some(d => d.name === 'screen_set_wheel')
+    ? '- Pickers (time/date/number wheels, the scrolling columns in alarm or booking apps): set each column with screen_set_wheel(node, value) instead of swiping it step by step, and use the value it reports.\n'
+    : ''
+  return `Operating apps on screen:
+- ${where} Pass screen: "main" only to see or act on what the user is looking at ("how do I reply to this?"). Without Shizuku everything happens on the user's screen; the result says so.
+- Prefer your own background screen whenever it works: with Shizuku + accessibility there is no reason to take the user's screen for ordinary app work. If a task really needs the user's screen (the phone stays locked, an app only works in the foreground, or a system dialog blocks the background screen), tell the user once before you start and let them choose — wait for their go-ahead, or hand_to_user(..., kind "choose") when the decision is theirs. Never silently take over the screen the user is using.
+- Login, captcha, payment, a page that blocks screenshots, or a choice only the user can make: call hand_to_user(reason, kind) instead of guessing or typing credentials, then read the screen again when it returns.
+- On a protected page (FLAG_SECURE: screenshots come back blocked or black) 完全权限 keeps going by itself: use screen_read / screen_tap / screen_type on the node tree, never screen_capture, and say so only if a screenshot is truly required (e.g. an image captcha). Other permission presets still hand it over with hand_to_user.
+- The in-app browser can export its cookies for the current page with browser_cookies (includes HttpOnly); use it when a task needs an authenticated session elsewhere.
+- When the user says a conversation/chat transcript was imported, read the attachment path it gives you with file_read straight away. If the read fails, quote the error back, then fix the approach (check the path with ls/file_stat, never guess the content) and report what was wrong.
+- Every action reports its effect. "Effect: nothing changed on screen." means the action did nothing: pick another element or approach, do not repeat it. If the app says you are going too fast or hit a limit, stop and tell the user. "Effect: switched to <app>" means another app came to the front.
+- A loop-guard warning in a result means you are repeating yourself without progress: change approach, or stop and report what blocks you. A refused call means stop and report.
+- Waits before sending, posting or replying are deliberate pacing so the app does not flag you as a bot; they are normal.
+- ${guide}
+${wheel}${notes}
+`
+}
+
+/** The English system-prompt section (the model replies in the user's language). */
+export function systemPromptSection(locale, descriptors = [], { homeWrites = false, shell = true, deviceTools = true } = {}) {
+  const lang = locale ? `The phone's language is ${locale}. Write BOTH your reasoning and your replies in the user's language; when unsure, use ${locale} (this defaults to Chinese).` : 'Reply in the language the user writes in.'
+  const examples = lockFreeExamples(descriptors)
+  if (descriptors.some(d => d.name.startsWith('file_') && d.needsUnlock !== true)) examples.push('file_*')
+  const tier1 = examples.length > 0
+    ? `System API tools (e.g. ${examples.join(', ')}): the direct way; those whose description does not say "needs the phone unlocked" also work while the phone is locked.`
+    : 'System API tools (files, settings, contacts, calendar, …): the direct way; those whose description does not say "needs the phone unlocked" also work while the phone is locked.'
+  return `# Running on the user's Android phone
+
+You run inside the DSH app on the user's own Android phone, not on a server or developer machine. ${deviceTools ? `The device tools (files, apps, screen, system settings, notifications, contacts/messages, media, clipboard, automation rules) act on this phone through the app; some groups may be missing because the user has not enabled them.
+
+Tool priority — always prefer the most direct, least fragile path:
+1. ${tier1}
+2. Intents and deep links (app_open_link, app_send_intent, share_to_app).
+3. Shizuku-backed tools (wifi_toggle, bluetooth_toggle, setting_put; adb_shell for pm, am, cmd, dumpsys, logcat or Android/data when no dedicated tool fits) when available.
+4. Screen automation (screen_read, screen_tap, screen_type, …) only when nothing above can do the job; it needs the phone unlocked and is slow and brittle.
+Each device tool's description ends with its policy line: risk read runs directly; write and sensitive (private data) may ask the user, depending on the permission mode; dangerous always asks. A tool marked "needs the phone unlocked" waits while the phone is locked (the user gets a notification) and returns waiting_for_user without acting if nobody unlocks it in time; tell the user when that happens instead of reporting the task as done.` : 'This conversation has no device tools: you cannot act on the phone here.'}
+
+Approvals and safety:
+- Read-only tools and read-only shell commands run directly${homeWrites ? ', and so do file writes inside your private home and temp folders (except in 仅可查看 mode)' : ''}. In 完全权限 (full access) every action is auto-approved and nothing is asked first. In 操作需确认 (ask) the app asks for each action; in 仅可查看 (read-only) only reads run.
+- If the user rejects a call, do not retry it — ask what they want instead. If a call is refused because the conversation is in 仅可查看 (read-only) mode, tell the user and ask them to switch the permission mode if they want the change made.
+- Before deleting, moving or overwriting files, keep the scope narrow and report the exact paths you changed in your result. In 完全权限 (full access) do not ask for confirmation first — the user asked for fully autonomous operation. Only the hardline below still refuses a call.
+- When a user message contains a word, acronym or product name you do not recognise (a misspelling or a niche tool), first decide by yourself, or ask the user which one they mean; a quick web search is also fine. When you ask, ask at most 10 questions at once.
+- When a user message contains a word, acronym or product name you do not recognise (a misspelling or a niche tool), decide yourself, or ask the user which one they mean (a quick web search is also fine). When you ask, ask at most 10 questions at once.
+- Attachments arrive as saved file paths (e.g. [附件已保存到 /path]). file_read opens them all — for an image it returns the image itself (no compression), so read it with file_read to see what the user sent. For a video, extract a frame with the shell (ffmpeg lives at /data/local/tmp/ff when present: /data/local/tmp/ff -ss 1 -i FILE -frames:v 1 /sdcard/frame.jpg) and file_read that frame; if no tool can decode it, say you cannot watch the video.
+- Your context can be compacted: only when you actually need what was said earlier, re-read this conversation's log with session_read (it works after compaction). Do not search or re-read out of habit; if the current message is self-contained, just answer.
+- When (and only when) you need what another conversation did (files it made, tools it set up, decisions), search it with session_search instead of asking the user to repeat it; after using it, name the conversation you searched.
+- The app hard-blocks some shell commands, in bash and adb_shell alike (wiping storage roots or system directories, formatting or writing block devices, reboot/shutdown, fork bombs, executing decoded payloads, uninstalling system packages, deleting system settings): such a call is refused before it runs and returns HARDLINE_BLOCKED. Never try to work around a block.
+
+${screenSection(descriptors)}${shell ? "Shell: the bash tool runs Android's /system/bin/sh (mksh) with toybox utilities, not GNU bash/coreutils; there is no root. " : ''}The user's shared storage is /sdcard (= /storage/emulated/0). Your working directory is the app's private home folder.
+
+# How to think
+Write your reasoning in complete sentences, not fragments: first restate what the user actually wants, then list the steps you intend to take, then summarise what each tool call taught you, and finish with the plan or claim you are about to give. Avoid abrupt openings ("OK", "Hmm", "Let me", "Wait") and dangling half-sentences; every thought should follow from the previous one, and uncertain points should say what you will check.
+
+If your previous reply ended with a question, a report or a decision the user has not reacted to yet, repeat the key point once (briefly) when you start the next turn, so a message the user missed is not silently skipped.
+
+Long tasks (working through a list, many screens): keep calling tools until the task is done. A reply without a tool call ends the task — there is no automatic next round, so never say you will continue later or automatically. Track progress with todo_write (which items are done) so a resumed task does not repeat actions that already took effect; if you must stop, say why, what is done, what remains and how to continue.
+
+${lang} Keep replies short and suited to a phone screen.`
+}
+
+/** Runtime-context note for an unattended automation run (`auto_…` session). */
+export function unattendedContext(descriptors = []) {
+  const locked = descriptors.filter(d => d.needsUnlock === true).map(d => d.name).sort()
+  return `Unattended automation run: an automation rule started this conversation and nobody is watching it.
+- Do not ask the user anything; questions are answered automatically with "nobody is available". Decide with the information you have and state any assumption in your result.
+- Only the tools the rule's owner approved run; any other call that needs approval is refused automatically. Do not retry a refused call — finish without it and say it was needed.
+- ${locked.length > 0 ? `Tools that need the phone unlocked (${locked.join(', ')}) wait until someone unlocks it, possibly for many minutes;` : 'Tools that need the phone unlocked wait until someone unlocks it, possibly for many minutes;'} use them only when the task cannot be done otherwise.
+- Finish with one short paragraph saying what was done (or why not); it is shown to the user as a notification.`
+}
+
+const UNATTENDED_ANSWER = 'Nobody is available to answer: this is an unattended automation run. Proceed with your best judgment and state your assumption in the result, or stop if the task cannot be done safely without an answer.'
+
+export function readOnlyRefusal(toolName) {
+  return `The conversation's permission mode is 仅可查看 (read-only): it does not allow "${toolName}" or any other action that changes files or the phone or reads private data, so the call was not run. ` +
+    'Do not retry it or work around it with another tool. Tell the user what you need to do and ask them to switch the permission mode (操作需确认 or 完全权限, in the composer) if they want it done.'
+}
+
+function rejectionText(toolName, { unattended, preset }) {
+  if (unattended) return `This unattended automation run may only use the tools its rule was approved for; "${toolName}" is not one of them, so the call was refused. Do not retry it; finish without it and say in your result that it was needed.`
+  if (preset === PRESETS.readOnly) return readOnlyRefusal(toolName)
+  return `The call to "${toolName}" was not approved: the user declined it${preset === undefined ? ', or the conversation is in 仅可查看 (read-only) mode, which refuses every action that needs approval' : ''}. ` +
+    'Do not retry it. Tell the user what you could not do and ask what they want instead (if the mode is read-only, they can switch it to 操作需确认 or 完全权限).'
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+/** Resolve symlinks of the deepest existing ancestor so `home/link/x` cannot escape a root. */
+function realish(p) {
+  const rest = []
+  let cur = p
+  for (;;) {
+    try { return join(realpathSync(cur), ...rest.reverse()) } catch {}
+    const parent = dirname(cur)
+    if (parent === cur) return p
+    rest.push(basename(cur))
+    cur = parent
+  }
+}
+
+const isUnder = (p, dir) => p === dir || p.startsWith(dir.endsWith('/') ? dir : dir + '/')
+
+function argText(args) {
+  let text = ''
+  try { text = typeof args?.command === 'string' ? args.command : JSON.stringify(args ?? {}) } catch {}
+  return text.length > 2000 ? text.slice(0, 2000) + '…' : text
+}
+
+/** Bounded Map: drops the oldest entries past `max`. */
+function remember(map, key, value, max = 500) {
+  map.delete(key)
+  map.set(key, value)
+  while (map.size > max) map.delete(map.keys().next().value)
+}
+
+/**
+ * The reasoning selector of each named model route, as dsh's llm runtime resolves it (the adapter's
+ * `resolveModel`, validated by `resolveModelInfo`): the levels `initialize { reasoningEffort }`
+ * accepts, with the adapter's labels, and the level applied when none is sent. A route that cannot
+ * be resolved (not registered, refused by the adapter) answers its error instead.
+ * @param llm - dsh's `llm` service.
+ * @param models - `[{ provider, model }]`.
+ * @returns `{ models: [{ provider, model, efforts: [{ id, name }], defaultEffort? } | { provider, model, error }] }`.
+ */
+export async function reasoningLevels(llm, models) {
+  if (!Array.isArray(models) || models.some(m => typeof m?.provider !== 'string' || typeof m?.model !== 'string' || m.provider === '' || m.model === ''))
+    throw new TypeError('android/models/reasoning: models must be an array of { provider, model } strings')
+  if (llm === undefined) throw new Error('android/models/reasoning: the llm service is not available')
+  const out = []
+  for (const { provider, model } of models) {
+    try {
+      const reasoning = (await llm.resolveModelInfo(provider, model)).reasoning
+      out.push({
+        provider, model,
+        efforts: (reasoning?.efforts ?? []).map(e => ({ id: String(e.id), name: String(e.name) })),
+        ...reasoning?.defaultEffort === undefined ? {} : { defaultEffort: String(reasoning.defaultEffort) },
+      })
+    } catch (error) {
+      out.push({ provider, model, error: String(error?.message ?? error) })
+    }
+  }
+  return { models: out }
+}
+
+export function apply(ctx, config = {}) {
+  const askTools = new Set(Array.isArray(config.askTools) ? config.askTools : ['bash', 'write', 'edit'])
+  const prices = { ...DEFAULT_PRICES, ...(config.prices ?? {}) }
+  const locale = typeof config.locale === 'string' ? config.locale : (process.env.DSH_ANDROID_LOCALE ?? '')
+  const home = process.env.DSH_HOME || join(homedir(), '.dsh')
+  const ledger = new Ledger(config.ledgerPath ?? join(home, 'android', 'budget.json'))
+  const writableRoots = [...new Set([process.env.HOME, tmpdir()].filter(d => typeof d === 'string' && d.startsWith('/')).map(d => realish(d)))]
+  let budget = {}
+  /** root session id → permission preset (from the app; unknown until it says). */
+  const presets = new Map()
+  /** Whether the app reports permission modes at all (HOME writes are only auto-allowed then). */
+  let presetsReported = false
+
+  const bridge = () => ctx.get('androidBridge')
+  /** Per plugin / MCP server "ask before call" (@dsh-android/plugin-extensions). */
+  const askBeforeCall = toolName => { try { return ctx.get('androidExtensions')?.askBeforeCall?.(toolName) === true } catch { return false } }
+  const descriptors = () => { try { return bridge()?.tools?.() ?? [] } catch { return [] } }
+  const isUnattended = root => typeof root === 'string' && root.startsWith(AUTO_PREFIX)
+  const sessionCwd = agent => {
+    try { return agent === undefined ? undefined : ctx.get('workingDirectory')?.get(agent.session) } catch { return undefined }
+  }
+
+  // ── 5. dsh runtime warnings → engine.log ───────────────────────────────────
+  // SDK mode has no console exporter; without this, retries, compaction / spill / attachment
+  // failures and fallbacks are invisible in the log users send back.
+  ctx.logger?.exporter?.({
+    levels: { default: 2 },
+    export: message => {
+      if (message.type !== 'warn' && message.type !== 'error') return
+      let text
+      try { text = format(...message.args) } catch { text = String(message.args?.[0]) }
+      if (text.length > 4000) text = text.slice(0, 4000) + '…'
+      process.stderr.write(`[dsh:${message.name}] ${message.type}: ${text}\n`)
+    },
+  })
+
+  // ── 2a. permission preset from the app (SDK extension, patch 10) ───────────
+  const methods = new Map([
+    ['android/session/permission', params => {
+      const sessionId = params?.sessionId
+      const preset = params?.preset
+      if (typeof sessionId !== 'string' || sessionId === '') throw new TypeError('android/session/permission requires a sessionId string')
+      if (preset !== null && !PRESET_IDS.has(preset)) throw new TypeError(`android/session/permission: unknown preset ${JSON.stringify(preset)}`)
+      if (preset === null) presets.delete(sessionId)
+      else remember(presets, sessionId, preset)
+      presetsReported = true
+      return {}
+    }],
+    // ── 7. reasoning levels per model route (the composer's 推理强度; #46) ──────
+    ['android/models/reasoning', params => reasoningLevels(ctx.get('llm'), params?.models)],
+  ])
+  ctx.on('sdk-extensions/resolve', method => methods.get(method))
+  // ── 8. per-conversation model (#53) ─────────────────────────────────────────
+  setupSessionModel(ctx)
+  // ── 9. session migration import (设置 → 导入数据（文件夹）) ─────────────────────
+  setupSessionImport(ctx, { home, cwd: process.env.HOME || home })
+
+  // ── 1. Hardline floor ──────────────────────────────────────────────────────
+  const hardlineVerdict = exec => {
+    const device = DEVICE_SHELL_TOOLS.get(exec.name)
+    if (device !== undefined) {
+      const text = exec.arguments?.[device]
+      return typeof text === 'string' ? checkCommand(text, { cwd: DEVICE_SHELL_CWD, env: { HOME: DEVICE_SHELL_CWD } }) : undefined
+    }
+    const field = SHELL_TOOLS.get(exec.name)
+    if (field === undefined) return undefined
+    const text = exec.arguments?.[field]
+    if (typeof text !== 'string') return undefined
+    const base = sessionCwd(exec.agent) ?? process.env.HOME
+    const workdir = exec.arguments?.workdir
+    const cwd = typeof workdir === 'string' && workdir !== '' ? posix.resolve(base ?? '/', workdir) : base
+    return checkCommand(text, { cwd })
+  }
+
+  /** Mutating built-ins that need no approval: read-only shell, writes inside HOME/TMPDIR. */
+  const autoAllowed = (exec, preset, unattended) => {
+    const field = SHELL_TOOLS.get(exec.name)
+    if (field !== undefined) return isReadOnlyCommand(exec.arguments?.[field])
+    if (FILE_WRITE_TOOLS.has(exec.name) && !unattended && (preset === PRESETS.ask || preset === PRESETS.full)) {
+      const file = exec.arguments?.file_path
+      if (typeof file !== 'string' || file.trim() === '') return false
+      const abs = posix.resolve(sessionCwd(exec.agent) ?? process.env.HOME ?? '/', file)
+      const real = realish(abs)
+      return writableRoots.some(root => isUnder(real, root))
+    }
+    return false
+  }
+
+  /** Resolve an `ask` through dsh's approval service here, so a refusal can say why. */
+  const resolveAsk = async (exec, ask, { root, unattended, preset }) => {
+    const approval = ctx.get('approval')
+    if (approval === undefined || exec.agent === undefined) return ask // dsh's own degrade path
+    const reason = ask.reason
+    const outcome = await approval.request({
+      agent: exec.agent,
+      toolName: exec.name,
+      callId: exec.callId,
+      ...reason === undefined ? {} : { reason },
+      ...ask.displayReason === undefined ? {} : { displayReason: ask.displayReason },
+      signal: exec.signal,
+    })
+    switch (outcome) {
+      case 'allowed-once':
+        return { kind: 'allow' }
+      case 'rejected':
+        return { kind: 'deny', reason: rejectionText(exec.name, { unattended, preset: presets.get(root) ?? preset }) }
+      case 'cancelled':
+        return exec.signal?.aborted ? { kind: 'cancel' } : { kind: 'deny', reason: `approval for tool "${exec.name}" was cancelled` }
+      default:
+        return { kind: 'deny', reason: `tool "${exec.name}" requires approval, but no approval channel is available` }
+    }
+  }
+
+  /** Human-facing consequences for dangerous verdicts (asked before the command runs). */
+  const dangerousReason = v => {
+    const CONSEQ = {
+      'rm-protected-root': '将递归删除受保护目录，数据不可恢复。',
+      'rm-system-dir': '将删除系统目录下的文件，可能导致系统异常。',
+      'find-delete-protected': '将删除受保护路径下的文件。',
+      'write-block-device': '将直接写入块设备，可能损坏分区和数据。',
+      'dd-block-device': '将用 dd 写入块设备，可能损坏数据。',
+      'mkfs-block-device': '将格式化块设备，上面的数据全部丢失。',
+      'disk-tool': '将改写磁盘分区或闪存，数据不可恢复。',
+      power: '将重启或关闭设备。',
+      wipe: '将抹掉设备数据（恢复出厂）。',
+      'settings-delete': '将删除系统设置，可能影响系统功能。',
+      'pm-uninstall-system': '将卸载系统应用或系统更新。',
+      'fork-bomb': '将生成自我复制的进程，耗尽系统资源导致设备卡死。',
+      'remote-payload': '将下载网络内容并立即执行，可能运行未知代码。',
+      'nested-notice': '命令包含多层嵌套，可能隐藏真实操作。',
+    }
+    return `${v.summary}。${CONSEQ[v.rule] || ''}是否继续？`
+  }
+
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    const v = hardlineVerdict(exec)
+    if (v !== undefined) {
+      const root0 = rootSessionId(ctx, exec.agent)
+      const unattended0 = isUnattended(root0)
+      const preset0 = unattended0 ? undefined : presets.get(root0)
+      const fullWaived = v.fullAllowed === true && preset0 === PRESETS.full
+      const nestedDeep = v.rule === 'nested-notice' && (v.depth ?? 1) >= 3
+      const mustAsk = !fullWaived && (v.rule !== 'nested-notice' || nestedDeep)
+      if (mustAsk) {
+        log(ctx, 'warn', `dangerous ${exec.name} (${v.rule}) -> asking`)
+        return resolveAsk(exec, { kind: 'ask', reason: `dangerous:${v.rule}`, displayReason: dangerousReason(v) }, { root: root0, unattended: unattended0, preset: preset0 })
+      }
+      log(ctx, 'warn', `hardline ${v.rule} waived (${fullWaived ? 'full permission' : 'nested < 3'})`)
+    }
+    // ── 2. approvals ──────────────────────────────────────────────────────────
+    const decision = await next()
+    const root = rootSessionId(ctx, exec.agent)
+    const unattended = isUnattended(root)
+    const preset = unattended ? undefined : presets.get(root)
+    let ask
+    if (decision?.kind === 'ask') ask = decision
+    else if (decision?.kind === 'allow' && askTools.has(exec.name)) {
+      if (autoAllowed(exec, preset, unattended)) return decision
+      ask = { kind: 'ask', reason: `${exec.name}: ${argText(exec.arguments)}` }
+    } else if (decision?.kind === 'allow' && askBeforeCall(exec.name)) {
+      // The user turned on "ask before call" for this tool's plugin or MCP server.
+      ask = { kind: 'ask', reason: `${exec.name}: ${argText(exec.arguments)}` }
+    } else return decision
+    const sensitive = bridge()?.descriptorOf?.(exec.name)?.risk === 'sensitive'
+    // Reading the phone's own data (location, notifications, …) never asks in a conversation.
+    if (sensitive && !unattended) return { kind: 'allow' }
+    if (preset === PRESETS.readOnly) return { kind: 'deny', reason: readOnlyRefusal(exec.name) }
+    return resolveAsk(exec, ask, { root, unattended, preset })
+  }, { prepend: true })
+  // Backstop: guards run after every pre-execute decision and cannot be overridden.
+  if (typeof ctx.tools.guard === 'function') {
+    ctx.tools.guard(exec => {
+      const v = hardlineVerdict(exec)
+      return v === undefined ? undefined : refusalText(v)
+    })
+  }
+
+  // Unattended runs: nobody can answer a question (ask_user_question, plan mode, …).
+  ctx.on('user-questions/request', async (request, next) => {
+    if (!isUnattended(rootSessionId(ctx, request?.agent))) return next()
+    log(ctx, 'info', `auto-answered ${request.questions?.length ?? 0} question(s) in an unattended run`)
+    return { answers: (request.questions ?? []).map(q => ({ id: q.id, selected: [], custom: UNATTENDED_ANSWER })) }
+  }, { prepend: true })
+
+  // ── 3. Budgets ─────────────────────────────────────────────────────────────
+  // Tokens are metered input-equivalent: uncached input + cache writes + output at full weight,
+  // cache reads weighted by their price ratio (cacheRead / input, 0.1 by default). A cached
+  // prefix re-read on every step would otherwise count ~10× its cost (ENGINE-CONTRACT §3).
+  const priceFor = model => prices[model] ?? prices.default
+  const overBudget = sessionId => {
+    ledger.rollover()
+    const s = ledger.session(sessionId)
+    if (budget.sessionTokenLimit !== undefined && s.tokens >= budget.sessionTokenLimit) return { kind: 'sessionTokenLimit', used: s.tokens, limit: budget.sessionTokenLimit }
+    if (budget.dailyTokenLimit !== undefined && ledger.state.dailyTokens >= budget.dailyTokenLimit) return { kind: 'dailyTokenLimit', used: ledger.state.dailyTokens, limit: budget.dailyTokenLimit }
+    if (budget.dailyCostLimitCny !== undefined && ledger.state.dailyCostCny >= budget.dailyCostLimitCny) return { kind: 'dailyCostLimitCny', used: Math.round(ledger.state.dailyCostCny * 1e4) / 1e4, limit: budget.dailyCostLimitCny }
+    return undefined
+  }
+  const meter = (root, usage, model) => {
+    const input = Number(usage.inputTokens ?? 0)
+    const output = Number(usage.outputTokens ?? 0)
+    const cacheRead = Number(usage.cacheReadTokens ?? 0)
+    const cacheWrite = Number(usage.cacheWriteTokens ?? 0)
+    const p = priceFor(model)
+    const cacheWeight = p.input > 0 ? Math.min(1, Math.max(0, p.cacheRead / p.input)) : 1
+    const tokens = Math.round(input + cacheWrite + output + cacheRead * cacheWeight)
+    if (!Number.isFinite(tokens) || tokens <= 0) return
+    const cost = ((input + cacheWrite) * p.input + cacheRead * p.cacheRead + output * p.output) / 1e6
+    ledger.add(root, tokens, Number.isFinite(cost) ? cost : 0)
+  }
+  ctx.on('session/event', (session, event) => {
+    const usage = usageOf(event)
+    if (usage !== undefined) meter(rootOfSession(ctx, session), usage, session.requestHeader?.()?.config?.model)
+  })
+  // ── 3b. App 经验库: routes and post-turn reflection (experience.js) ──────────
+  setupExperience(ctx, { bridge, rootOf: agent => rootSessionId(ctx, agent), meter, withinBudget: root => overBudget(root) === undefined, log })
+  // ── 6. Long tasks: continuation with open todos, explicit turn-end reasons ──
+  const continuation = setupContinuation(ctx, { log, ...config.appendRecord === undefined ? {} : { appendRecord: config.appendRecord } })
+  ctx.on('agent/pre-step', async (input, next) => {
+    const sessionId = rootSessionId(ctx, input.agent)
+    const over = sessionId === undefined ? undefined : overBudget(sessionId)
+    if (over === undefined) return next()
+    log(ctx, 'warn', `budget exceeded for ${sessionId}: ${over.kind} ${over.used} >= ${over.limit}; refusing the step`)
+    try {
+      bridge()?.notify?.('budget/exceeded', { sessionId, ...over })
+    } catch {}
+    // The turn ends `blocked`; the record says it was this budget (the app's end card).
+    if (input.agent?.session !== undefined) await continuation.record(input.agent.session, { turn: input.turn, reason: 'budget', ...over })
+    return { kind: 'reject' }
+  }, { prepend: true })
+  ctx.inject(['androidBridge'], child => {
+    const b = child.get('androidBridge')
+    budget = b.budget ?? {}
+    const off = b.onBudget(next => { budget = next })
+    child.effect(() => off, 'android-guard.budget')
+  })
+  ctx.effect(() => () => ledger.save(), 'android-guard.ledger')
+
+  // ── 4. System prompt ───────────────────────────────────────────────────────
+  ctx.inject(['systemPrompt'], child => {
+    const sp = child.get('systemPrompt')
+    // The section text depends only on descriptor metadata and on which tools the calling agent
+    // sees (a session mode, plugin-mode, may hide device groups or the shell), so it is stable
+    // while the tool set is.
+    sp.variable('android_phone_context', context => {
+      const scope = context?.scope
+      // A deferred tool (plugin-mode, loaded on demand) counts as visible: the section must not
+      // change when the conversation loads it (that would re-send the cached system prompt).
+      const deferred = name => { try { return ctx.get('androidToolScope')?.deferred?.(name, scope) === true } catch { return false } }
+      const visible = name => { try { return ctx.tools.get(name, scope) !== undefined || deferred(name) } catch { return true } }
+      const all = descriptors()
+      const shown = scope === undefined ? all : all.filter(d => visible(d.name))
+      return systemPromptSection(locale, shown, {
+        homeWrites: presetsReported,
+        shell: scope === undefined || visible('bash'),
+        deviceTools: shown.length > 0 || all.length === 0,
+      })
+    })
+    sp.section({ name: 'android:phone-context', order: 130, text: '{{android_phone_context}}' })
+    sp.context({
+      name: 'android:unattended',
+      order: 130,
+      interpolate: false,
+      text: context => context.agent !== undefined && isUnattended(rootSessionId(ctx, context.agent)) ? unattendedContext(descriptors()) : '',
+    })
+  })
+}

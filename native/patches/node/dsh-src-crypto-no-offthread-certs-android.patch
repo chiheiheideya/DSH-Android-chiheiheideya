@@ -1,0 +1,18 @@
+crypto: don't load root certificates on a helper thread on Android.
+The first OpenSSL decoder use from that thread races JS on the main
+thread and segfaulted in OSSL_DECODER_CTX_* inside the app process.
+
+--- a/src/crypto/crypto_context.cc
++++ b/src/crypto/crypto_context.cc
+@@ -980,6 +980,11 @@
+ 
+ void StartLoadingCertificatesOffThread(
+     const FunctionCallbackInfo<Value>& args) {
++#ifdef __ANDROID__
++  // Embedded in an Android app process: concurrent first use of OpenSSL's
++  // decoders from this helper thread crashes; load lazily on first TLS use.
++  return;
++#endif
+   // Load the CA certificates eagerly off the main thread to avoid
+   // blocking the main thread when the first TLS connection is made. We
+   // don't need to wait for the thread to finish with code here, as

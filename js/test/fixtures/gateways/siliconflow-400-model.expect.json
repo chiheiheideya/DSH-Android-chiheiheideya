@@ -1,0 +1,17 @@
+{
+  "provider": "SiliconFlow (api.siliconflow.cn/v1)",
+  "source": "from docs: docs.siliconflow.cn error codes ({\"code\": <int>, \"message\", \"data\"}; 401 body is a bare JSON string)",
+  "model": "deepseek-ai/nope",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 400,
+      "messageIncludes": "Model does not exist"
+    }
+  },
+  "body": "siliconflow-400-model.json"
+}

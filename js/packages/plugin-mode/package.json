@@ -1,0 +1,17 @@
+{
+  "name": "@dsh-android/plugin-mode",
+  "version": "0.1.0",
+  "description": "DSH-Android session modes: per-conversation tool scope (device groups + built-in tool categories + skills) and extra system-prompt text, pushed by the app through android/session/mode; deferred (on-demand) tool loading.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "deferred.js", "package.json"],
+  "engines": {
+    "dsh": "0.2.1-rc.5"
+  }
+}

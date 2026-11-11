@@ -1,0 +1,17 @@
+{
+  "provider": "Ollama (OpenAI compatibility, http://localhost:11434/v1)",
+  "source": "from docs: Ollama OpenAI-compat error envelope ({\"error\":{\"message\",\"type\":\"api_error\"|\"invalid_request_error\",\"param\":null,\"code\":null}})",
+  "model": "gemma2:2b",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 400,
+      "messageIncludes": "does not support tools"
+    }
+  },
+  "body": "ollama-400-tools-unsupported.json"
+}

@@ -1,0 +1,40 @@
+{
+  "provider": "Ollama (OpenAI compatibility, http://localhost:11434/v1)",
+  "source": "from docs: docs.ollama.com/api/openai-compatibility + thinking (thinking streamed as `delta.reasoning`, whole tool call in one chunk; releases before tool-call finish mapping report finish_reason \"stop\" for a tool-call turn)",
+  "model": "qwen3:8b",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "call_scrubbed06"
+      }
+    ],
+    "usage": {
+      "inputTokens": 140,
+      "outputTokens": 45,
+      "totalTokens": 185,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning"
+    ]
+  },
+  "echo": {
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "absent": [
+      "reasoning_content"
+    ]
+  },
+  "body": "ollama-reasoning-tools-stop.sse"
+}

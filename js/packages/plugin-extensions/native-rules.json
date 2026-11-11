@@ -1,0 +1,18 @@
+{
+  "//": "Phone compatibility gate (pnpmfile.cjs readPackage). Updated with the engine. A hard dependency that matches is refused before anything is downloaded; an optional one is dropped from its parent's manifest.",
+  "buildTools": ["node-gyp", "prebuild-install", "node-pre-gyp", "@mapbox/node-pre-gyp", "cmake-js", "napi-build-utils", "node-gyp-build", "node-gyp-build-optional-packages", "bindings", "nan", "node-addon-api", "prebuildify"],
+  "scriptMarkers": ["node-gyp", "prebuild-install", "node-pre-gyp", "cmake-js", "napi", "prebuildify", "node-gyp-build"],
+  "nativePackages": [
+    "better-sqlite3", "sqlite3", "@journeyapps/sqlcipher", "canvas", "@napi-rs/canvas", "bcrypt", "argon2", "re2",
+    "usb", "serialport", "@serialport/bindings-cpp", "node-pty", "@homebridge/node-pty-prebuilt-multiarch", "robotjs", "keytar",
+    "onnxruntime-node", "@tensorflow/tfjs-node", "@tensorflow/tfjs-node-gpu", "esbuild", "@swc/core", "lightningcss",
+    "@parcel/watcher", "electron", "sharp-libvips", "leveldown", "classic-level", "rocksdb", "lmdb", "msgpackr-extract",
+    "cpu-features", "fsevents", "utf-8-validate", "bufferutil", "zeromq", "ffi-napi", "ref-napi", "koffi", "isolated-vm",
+    "deasync", "fibers", "kerberos", "snappy", "@node-rs/argon2", "@node-rs/bcrypt", "@node-rs/jieba", "nodejieba",
+    "hnswlib-node", "faiss-node", "@lancedb/lancedb", "vectordb", "duckdb", "@duckdb/node-api", "tree-sitter",
+    "node-llama-cpp", "@xenova/transformers", "@huggingface/transformers", "puppeteer-core-chromium"
+  ],
+  "desktopBrowser": ["puppeteer", "playwright", "playwright-chromium", "playwright-firefox", "playwright-webkit", "@playwright/test", "chromedriver", "selenium-webdriver"],
+  "platformBinary": "[-/](linux|darwin|win32|freebsd|android|openbsd|sunos|aix)-(x64|arm64|ia32|arm|riscv64|ppc64|s390x|loong64)(-(gnu|musl|gnueabihf|msvc|eabi))?$",
+  "sharedWithEngine": ["sharp"]
+}

@@ -1,0 +1,16 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/guides/error-codes",
+  "model": "gpt-4.1",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "CONTEXT_WINDOW_EXCEEDED",
+      "status": 400
+    }
+  },
+  "body": "openai-400-context.json"
+}

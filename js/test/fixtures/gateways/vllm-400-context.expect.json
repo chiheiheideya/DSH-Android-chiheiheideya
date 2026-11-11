@@ -1,0 +1,16 @@
+{
+  "provider": "vLLM (OpenAI-compatible server)",
+  "source": "from docs: vLLM ErrorResponse ({\"object\":\"error\",\"message\",\"type\",\"param\",\"code\": <int>})",
+  "model": "Qwen/Qwen3-8B",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "CONTEXT_WINDOW_EXCEEDED",
+      "status": 400
+    }
+  },
+  "body": "vllm-400-context.json"
+}

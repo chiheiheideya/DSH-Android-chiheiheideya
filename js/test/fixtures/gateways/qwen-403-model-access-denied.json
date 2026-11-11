@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Model access denied.",
+    "type": "Model.AccessDenied",
+    "param": null,
+    "code": "Model.AccessDenied"
+  }
+}

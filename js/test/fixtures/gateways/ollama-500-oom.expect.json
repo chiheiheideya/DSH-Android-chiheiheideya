@@ -1,0 +1,17 @@
+{
+  "provider": "Ollama (OpenAI compatibility, http://localhost:11434/v1)",
+  "source": "from docs: Ollama OpenAI-compat error envelope ({\"error\":{\"message\",\"type\":\"api_error\"|\"invalid_request_error\",\"param\":null,\"code\":null}})",
+  "model": "qwen3:8b",
+  "http": {
+    "status": 500,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "SERVER",
+      "status": 500,
+      "messageIncludes": "more system memory"
+    }
+  },
+  "body": "ollama-500-oom.json"
+}

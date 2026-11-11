@@ -1,0 +1,17 @@
+{
+  "provider": "vLLM (OpenAI-compatible server)",
+  "source": "from docs: vLLM ErrorResponse ({\"object\":\"error\",\"message\",\"type\",\"param\",\"code\": <int>})",
+  "model": "foo",
+  "http": {
+    "status": 404,
+    "contentType": "application/json"
+  },
+  "expect": {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "status": 404,
+      "messageIncludes": "The model `foo` does not exist."
+    }
+  },
+  "body": "vllm-404-model.json"
+}

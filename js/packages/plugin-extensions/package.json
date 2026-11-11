@@ -1,0 +1,42 @@
+{
+  "name": "@dsh-android/plugin-extensions",
+  "version": "0.1.0",
+  "description": "DSH-Android extensions: phone gate around dsh's plugin manager (pnpmfile, binary scan, service precheck), install sources, status, updates, config forms, skills and MCP servers as android/ext/* SDK methods; boot bookkeeping (crash attribution, safe mode) for the android entry.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "main": "index.js",
+  "files": [
+    "package.json",
+    "index.js",
+    "boot.js",
+    "errors.js",
+    "sources.js",
+    "fetch-sources.js",
+    "archive.js",
+    "scan.js",
+    "precheck.js",
+    "precheck-worker.mjs",
+    "updates.js",
+    "skills.js",
+    "mcp.js",
+    "pnpmfile.cjs",
+    "native-rules.json"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./boot.js": "./boot.js",
+    "./errors.js": "./errors.js",
+    "./sources.js": "./sources.js",
+    "./fetch-sources.js": "./fetch-sources.js",
+    "./archive.js": "./archive.js",
+    "./scan.js": "./scan.js",
+    "./mcp.js": "./mcp.js",
+    "./skills.js": "./skills.js",
+    "./pnpmfile.cjs": "./pnpmfile.cjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "dsh": "0.2.1-rc.5"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "provider": "DeepSeek official (api.deepseek.com/v1)",
+  "source": "live capture 2026-10-30, deepseek-flash, thinking enabled, reasoning_effort low, stream_options.include_usage; ids scrubbed",
+  "body": "deepseek-thinking-tool-call.sse",
+  "model": "deepseek-flash",
+  "http": { "status": 200, "contentType": "text/event-stream; charset=utf-8" },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants weather in Paris in celsius. Call the tool.",
+    "toolCalls": [{ "name": "get_weather", "arguments": { "city": "Paris", "unit": "c" } }],
+    "usage": { "inputTokens": 319, "outputTokens": 68, "totalTokens": 387, "cacheReadTokens": 0, "cacheWriteTokens": 0 },
+    "finish": "tool-calls",
+    "replayFields": ["reasoning_content"]
+  },
+  "echo": { "reasoning_content": "The user wants weather in Paris in celsius. Call the tool.", "absent": ["reasoning", "reasoning_details"] }
+}

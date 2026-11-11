@@ -1,0 +1,100 @@
+name: build-apk
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Android SDK (use preinstalled, accept licenses)
+        run: |
+          set -x
+          ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          CMDLINE="$ANDROID_HOME/cmdline-tools/16.0/bin"
+          [ -d "$CMDLINE" ] || CMDLINE="$(dirname "$(find "$ANDROID_HOME" -name sdkmanager -type f | head -1)")"
+          export PATH="$CMDLINE:$ANDROID_HOME/platform-tools:$PATH"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$CMDLINE" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          sdkmanager --version || true
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          (sdkmanager "platforms;android-37.2" && echo "GOT_37_2") || (sdkmanager "platforms;android-37" && echo "GOT_37") || (sdkmanager "platforms;android-36" && echo "GOT_36")
+          sdkmanager "build-tools;37.0.0" "platform-tools" || sdkmanager "build-tools;36.0.0" "platform-tools" || true
+
+      - name: Signing keystore (fixed, cached)
+        uses: actions/cache@v4
+        with:
+          path: ~/signing
+          key: dsh-signing-chiheiheideya-v1
+
+      - name: Generate keystore if missing (alias chiheiheideya)
+        run: |
+          mkdir -p "$HOME/signing"
+          KS="$HOME/signing/dsh.jks"
+          if [ ! -f "$KS" ]; then
+            keytool -genkeypair -v -keystore "$KS" -alias chiheiheideya -keyalg RSA -keysize 4096 \
+              -validity 10000 -storepass chiheiheideya -keypass chiheiheideya \
+              -dname "CN=chiheiheideya, OU=DSH, O=chiheiheideya, C=CN"
+          fi
+          keytool -list -v -keystore "$KS" -storepass chiheiheideya | grep -E "Owner|SHA256" || true
+
+      - name: Build number (continues from 54)
+        run: echo "BUILD_NO=$(( 53 + ${{ github.run_number }} ))" >> "$GITHUB_ENV"
+
+      - name: Native prebuilt libs
+        run: bash native/prebuilt.sh fetch
+
+      - name: Shizuku APK asset
+        run: bash tools/fetch-shizuku.sh
+
+      - name: Build engine
+        run: bash js/build-engine.sh
+
+      - name: Gradle assembleDebug (engine + native assets checked)
+        run: |
+          set -e
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace \
+            -Pdsh.engineOut="$PWD/toolchains/out/engine" \
+            -Pdsh.nativeOut="$PWD/../toolchains/out/jniLibs" \
+            -Pdsh.thirdPartyOut="$PWD/toolchains/out/third-party" \
+            -Pdsh.versionSuffix="-chiheiheideya~$BUILD_NO" \
+            -Pdsh.debug.storeFile="$HOME/signing/dsh.jks" \
+            -Pdsh.debug.storePassword=chiheiheideya \
+            -Pdsh.debug.keyAlias=chiheiheideya \
+            -Pdsh.debug.keyPassword=chiheiheideya
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          echo "APK: $APK ($(stat -c%s "$APK") bytes)"
+          unzip -l "$APK" | grep -q "assets/engine.zip" && echo "engine.zip OK" || { echo "MISSING assets/engine.zip"; exit 1; }
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libnode.so" && echo "libnode.so OK" || { echo "MISSING libnode.so"; exit 1; }
+          unzip -l "$APK" | grep -q "assets/shizuku/shizuku.apk" && echo "shizuku OK" || { echo "MISSING shizuku"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Publish release (public APK download)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: chiheiheideya-${{ env.BUILD_NO }}
+          name: DSH chiheiheideya ${{ env.BUILD_NO }}
+          body: "chiheiheideya 自动构建（debug keystore）。"
+          files: app/build/outputs/apk/debug/app-debug.apk

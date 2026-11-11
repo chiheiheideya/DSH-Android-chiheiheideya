@@ -1,0 +1,19 @@
+libnode.so: link with -Bsymbolic on Android so its OpenSSL/zlib/uv symbols
+can't be interposed by system libraries already loaded in the app process
+(segfault in OSSL_DECODER_CTX_free from a BoringSSL OPENSSL_sk_push).
+
+--- a/node.gyp
++++ b/node.gyp
+@@ -1149,6 +1149,12 @@
+               '@rpath/lib<(node_core_target_name).<(shlib_suffix)'
+           },
+         }],
++        # Android app processes already have the platform's BoringSSL (and other
++        # system libs) in the global symbol scope; bind libnode's own symbols
++        # locally so e.g. OPENSSL_sk_push can't resolve to BoringSSL.
++        ['node_shared=="true" and OS=="android"', {
++          'ldflags': [ '-Wl,-Bsymbolic' ],
++        }],
+         ['node_shared=="true" and OS in "aix os400"', {
+           'ldflags': ['--shared'],
+           'direct_dependent_settings': {

@@ -1,0 +1,18 @@
+{
+  "provider": "Alibaba DashScope compatible-mode (dashscope.aliyuncs.com/compatible-mode/v1)",
+  "source": "from docs (synthetic): help.aliyun.com/zh/model-studio/error-code (a model that must be 开通 in 百炼 first; Chinese wording seen in client reports)",
+  "model": "qwen3-max",
+  "http": {
+    "status": 400,
+    "contentType": "application/json"
+  },
+  "basePath": "/compatible-mode/v1",
+  "expect": {
+    "error": {
+      "code": "MODEL_NOT_AVAILABLE",
+      "status": 400,
+      "messageIncludes": "该模型未开通"
+    }
+  },
+  "body": "qwen-400-model-not-activated.json"
+}

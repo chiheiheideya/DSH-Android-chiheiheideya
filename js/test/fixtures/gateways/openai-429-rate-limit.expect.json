@@ -1,0 +1,21 @@
+{
+  "provider": "OpenAI (api.openai.com/v1)",
+  "source": "from docs: platform.openai.com/docs/guides/error-codes",
+  "model": "gpt-4.1",
+  "http": {
+    "status": 429,
+    "contentType": "application/json",
+    "headers": {
+      "retry-after": "2",
+      "x-request-id": "req_scrubbed"
+    }
+  },
+  "expect": {
+    "error": {
+      "code": "RATE_LIMIT",
+      "status": 429,
+      "retryAfterMs": 2000
+    }
+  },
+  "body": "openai-429-rate-limit.json"
+}

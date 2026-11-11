@@ -1,0 +1,16 @@
+{
+  "provider": "OpenRouter (openrouter.ai/api/v1)",
+  "source": "from docs: openrouter.ai/docs/api-reference/errors (mid-stream errors: top-level `error` + finish_reason \"error\", HTTP status stays 200)",
+  "model": "deepseek/deepseek-r1-0528",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "error": {
+      "code": "SERVER",
+      "messageIncludes": "Provider disconnected unexpectedly"
+    }
+  },
+  "body": "openrouter-midstream-error.sse"
+}

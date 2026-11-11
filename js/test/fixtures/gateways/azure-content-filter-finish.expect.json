@@ -1,0 +1,16 @@
+{
+  "provider": "Azure OpenAI (<resource>.openai.azure.com/openai/v1)",
+  "source": "from docs: learn.microsoft.com content filtering (finish_reason \"content_filter\" ends a partially streamed completion)",
+  "model": "gpt-4o",
+  "basePath": "/openai/v1",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "I cannot",
+    "usage": null,
+    "finish": "stop"
+  },
+  "body": "azure-content-filter-finish.sse"
+}

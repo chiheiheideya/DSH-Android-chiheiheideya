@@ -1,0 +1,37 @@
+{
+  "provider": "LM Studio (http://localhost:1234/v1)",
+  "source": "from docs: lmstudio.ai/docs/developer/openai-compat (separate reasoning_content setting, numeric-string tool call ids, usage on the finish chunk)",
+  "model": "qwen/qwen3-4b",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream"
+  },
+  "expect": {
+    "text": "",
+    "reasoning": "The user wants the weather in Paris. I should call get_weather.",
+    "toolCalls": [
+      {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Paris"
+        },
+        "id": "365174485"
+      }
+    ],
+    "usage": {
+      "inputTokens": 210,
+      "outputTokens": 55,
+      "totalTokens": 265,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "tool-calls",
+    "replayFields": [
+      "reasoning_content"
+    ]
+  },
+  "echo": {
+    "reasoning_content": "The user wants the weather in Paris. I should call get_weather."
+  },
+  "body": "lmstudio-reasoning-tools.sse"
+}

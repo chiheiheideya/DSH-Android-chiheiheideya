@@ -1,0 +1,22 @@
+{
+  "provider": "Azure OpenAI (<resource>.openai.azure.com/openai/v1)",
+  "source": "from docs: learn.microsoft.com/azure/ai-foundry/openai/concepts/content-filter (first chunk has empty choices + prompt_filter_results; asynchronous filter appends delta-less chunks with content_filter_offsets after finish)",
+  "model": "gpt-4o",
+  "basePath": "/openai/v1",
+  "http": {
+    "status": 200,
+    "contentType": "text/event-stream; charset=utf-8"
+  },
+  "expect": {
+    "text": "Paris is sunny.",
+    "usage": {
+      "inputTokens": 15,
+      "outputTokens": 4,
+      "totalTokens": 19,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    },
+    "finish": "stop"
+  },
+  "body": "azure-filter-frames.sse"
+}

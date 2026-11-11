@@ -1,0 +1,90 @@
+--- a/@deepseek-ai/dsh-attachment-local/lib/index.js
++++ b/@deepseek-ai/dsh-attachment-local/lib/index.js
+@@ -4,8 +4,38 @@
+ import { dshCachePath, resolveDshHome } from "@deepseek-ai/dsh-home-paths";
+ import { createHash, randomUUID } from "node:crypto";
+ import { constants, createReadStream } from "node:fs";
+-import { chmod, link, mkdir, open, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
++import { chmod, mkdir, open, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
++import { constants as __dshFsConstants } from "node:fs";
++import { copyFile as __dshCopyFile, link as __dshNodeLink, lstat as __dshLstat, rename as __dshRename, rm as __dshRm } from "node:fs/promises";
+ import { createLazyRequire } from "@deepseek-ai/dsh-lazy-require";
++
++// DSH-Android: hard links fail with EACCES/EPERM in Android app storage
++// (SELinux). Fall back to an exclusive copy + rename that keeps link()'s
++// "fail with EEXIST if the target exists" contract.
++const __dshLinkFallbackCodes = new Set(["EACCES", "EPERM", "ENOSYS", "ENOTSUP", "EOPNOTSUPP", "EXDEV", "EMLINK"]);
++async function link(source, target) {
++	try {
++		return await __dshNodeLink(source, target);
++	} catch (error) {
++		if (!(error && __dshLinkFallbackCodes.has(error.code))) throw error;
++	}
++	const temporary = `${target}.dsh-copy-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
++	await __dshCopyFile(source, temporary, __dshFsConstants.COPYFILE_EXCL);
++	try {
++		let exists = true;
++		try {
++			await __dshLstat(target);
++		} catch (error) {
++			if (error?.code !== "ENOENT") throw error;
++			exists = false;
++		}
++		if (exists) throw Object.assign(new Error(`EEXIST: file already exists, link '${source}' -> '${target}'`), { code: "EEXIST", errno: -17, syscall: "link", path: source, dest: target });
++		await __dshRename(temporary, target);
++	} finally {
++		await __dshRm(temporary, { force: true }).catch(() => {});
++	}
++}
++
+ //#region lib/types/compression-limiter.js
+ /** Instance-owned concurrency bound for native image transformations. */
+ /**
+--- a/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js
++++ b/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js
+@@ -1,7 +1,9 @@
+ import z from "@deepseek-ai/schemastery";
+ import { SessionFormatUnsupportedMigrationError, createSessionFormatCatalogWithChildren, historicalSessionFormatCatalog, sessionFormatCatalog } from "@deepseek-ai/dsh-session-format-catalog";
+ import { readdirSync } from "node:fs";
+-import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, stat, truncate } from "node:fs/promises";
++import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, stat, truncate } from "node:fs/promises";
++import { constants as __dshFsConstants } from "node:fs";
++import { copyFile as __dshCopyFile, link as __dshNodeLink, lstat as __dshLstat, rename as __dshRename, rm as __dshRm } from "node:fs/promises";
+ import { basename, dirname, isAbsolute, join, parse, resolve, toNamespacedPath } from "node:path";
+ import { performance } from "node:perf_hooks";
+ import { scheduler } from "node:timers/promises";
+@@ -19,6 +21,34 @@
+ import { Worker } from "node:worker_threads";
+ import { currentSessionMessageProjections } from "@deepseek-ai/dsh-session-format-catalog/message-projections";
+ import { Readable, pipeline } from "node:stream";
++
++// DSH-Android: hard links fail with EACCES/EPERM in Android app storage
++// (SELinux). Fall back to an exclusive copy + rename that keeps link()'s
++// "fail with EEXIST if the target exists" contract.
++const __dshLinkFallbackCodes = new Set(["EACCES", "EPERM", "ENOSYS", "ENOTSUP", "EOPNOTSUPP", "EXDEV", "EMLINK"]);
++async function link(source, target) {
++	try {
++		return await __dshNodeLink(source, target);
++	} catch (error) {
++		if (!(error && __dshLinkFallbackCodes.has(error.code))) throw error;
++	}
++	const temporary = `${target}.dsh-copy-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
++	await __dshCopyFile(source, temporary, __dshFsConstants.COPYFILE_EXCL);
++	try {
++		let exists = true;
++		try {
++			await __dshLstat(target);
++		} catch (error) {
++			if (error?.code !== "ENOENT") throw error;
++			exists = false;
++		}
++		if (exists) throw Object.assign(new Error(`EEXIST: file already exists, link '${source}' -> '${target}'`), { code: "EEXIST", errno: -17, syscall: "link", path: source, dest: target });
++		await __dshRename(temporary, target);
++	} finally {
++		await __dshRm(temporary, { force: true }).catch(() => {});
++	}
++}
++
+ /**
+ * The JSONL session handle. Mutations serialize on a per-handle promise
+ * chain; reads re-scan the artifact on demand and never observe a shorter log

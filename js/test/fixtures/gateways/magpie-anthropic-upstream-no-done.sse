@@ -1,0 +1,22 @@
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"reasoning_content":"The user wants the weathe"},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"reasoning_content":"r in Paris. I should call"},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"reasoning_content":" get_weather."},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"content":"Checking."},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"toolu_scrubbed13","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"city\":"}}]},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":" \"Paris\""}}]},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}}]},"finish_reason":null}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"id":"msg_scrubbed","object":"chat.completion.chunk","created":1793380000,"model":"claude-sonnet-4-5","choices":[],"usage":{"prompt_tokens":500,"completion_tokens":90,"total_tokens":590,"prompt_tokens_details":{"cached_tokens":400}}}
+
