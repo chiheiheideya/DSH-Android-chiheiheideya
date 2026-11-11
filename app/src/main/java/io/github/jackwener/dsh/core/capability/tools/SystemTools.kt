@@ -64,6 +64,16 @@ class SystemTools @Inject constructor(
         else -> AudioManager.STREAM_MUSIC
     }
 
+    /**
+     * Dhizuku（设备所有者）是否真能用：装了 + 已授权 + 用户服务连上。
+     * 特权操作（安装 APK 等）优先用它，不行再回落到 Shizuku。
+     */
+    private suspend fun dhizukuUsable(): Boolean = runCatching {
+        io.github.jackwener.dsh.core.platform.DhizukuBridge.isReady(context) &&
+            io.github.jackwener.dsh.core.platform.DhizukuBridge.isGranted() &&
+            io.github.jackwener.dsh.core.platform.DhizukuBridge.ensureBound(context)
+    }.getOrDefault(false)
+
     private suspend fun shell(cmd: String, what: String): ToolResult {
         if (!shizuku.available) throw ShellUnavailableException(gate.access.state.value)
         val r = shizuku.exec(cmd)
@@ -386,6 +396,13 @@ class SystemTools @Inject constructor(
                 // The hardline floor lives in the engine (plugin-guard); a direct rule step would skip it.
                 if (!call.viaEngine) return ToolResult.error("not_authorized", AdbShell.NOT_FROM_ENGINE)
                 val cmd = args.reqStr("command")
+                // 权限优先级：安装类命令若 Dhizuku（设备所有者）可用，先用它静默安装；
+                // Dhizuku 未授权/无效时再走 Shizuku 的 pm install。
+                val apkPath = Regex("""^\s*pm\s+install\b[^;&|]*?(\S+\.apk)\s*$""").find(cmd)?.groupValues?.get(1)
+                if (apkPath != null && dhizukuUsable()) {
+                    val out = io.github.jackwener.dsh.core.platform.DhizukuBridge.doCommand("install_apk", apkPath)
+                    if (!out.startsWith("failed")) return ToolResult.text("（用 Dhizuku 设备所有者权限静默安装，未弹系统确认）\n" + out)
+                }
                 if (!shizuku.available) throw ShellUnavailableException(gate.access.state.value)
                 val timeoutS = AdbShell.timeoutS(args.int("timeout_s"))
                 val r = shizuku.exec(cmd, timeoutS * 1000L)
