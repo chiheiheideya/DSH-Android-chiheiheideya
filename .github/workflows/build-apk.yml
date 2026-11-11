@@ -85,6 +85,12 @@ jobs:
           unzip -l "$APK" | grep -q "lib/arm64-v8a/libnode.so" && echo "libnode.so OK" || { echo "MISSING libnode.so"; exit 1; }
           unzip -l "$APK" | grep -q "assets/shizuku/shizuku.apk" && echo "shizuku OK" || { echo "MISSING shizuku"; exit 1; }
 
+      - name: Update manifest (app 内「检查更新」用)
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          python3 tools/make-update-manifest.py "$APK" --tag v0.4.0 --name app-debug.apk -o update.json
+          head -c 300 update.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: dsh-debug-apk
@@ -106,4 +112,6 @@ jobs:
           tag_name: v0.4.0
           name: DSH 0.4.0
           body: "chiheiheideya 自动构建（debug keystore）。"
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            update.json
