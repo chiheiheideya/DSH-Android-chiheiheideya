@@ -516,7 +516,7 @@ private fun AboutSection(vm: SettingsViewModel) {
     LaunchedEffect(Unit) { vm.runDoctor() }
     Spacer(Modifier.height(8.dp))
     SettingsCard {
-        SettingsRow("DSH", stringResource(R.string.version, BuildConfig.VERSION_NAME), divider = false,
+        SettingsRow("DSH", stringResource(R.string.version, BuildConfig.VERSION_NAME) + " · build " + BuildConfig.VERSION_CODE, divider = false,
             leading = { io.github.jackwener.dsh.core.designsystem.Whale(width = 22.dp) })
         var exportState by remember { mutableStateOf<String?>(null) }
         var importState by remember { mutableStateOf<String?>(null) }
