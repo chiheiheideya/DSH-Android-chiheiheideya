@@ -140,7 +140,8 @@ open class ConversationController(
     /** The composer took [SessionLive.restoredDraft] (queued messages handed back after a stop or failure). */
     fun consumeRestoredDraft() = store.consumeRestoredDraft(sessionId.value)
 
-    fun stop() = viewModelScope.launch { store.stop() }
+    // 只停当前会话：以前 store.stop() 会把其他正在跑的会话一起停掉
+    fun stop() = viewModelScope.launch { store.stop(sessionId.value) }
     fun retry(e: TurnError) = viewModelScope.launch { store.retry(sessionId.value, e) }
     /** 继续 on a turn's end card (work remains). */
     fun continueTask() = viewModelScope.launch { store.continueTask(sessionId.value) }

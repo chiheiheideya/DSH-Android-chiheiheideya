@@ -605,8 +605,28 @@ class SessionStore @Inject constructor(
     /** Set while this store stops the engine itself; the resulting channel close is not a crash. */
     @Volatile private var stopping = false
 
-    /** Stops every run (the SDK has no per-session cancel, so this stops the engine process). */
+    /** Stops every run (whole engine; used by 重启引擎 / 诊断). */
     suspend fun stop() = stopEngine()
+
+    /**
+     * 只停**这一个**会话的回答。以前一律走 engine.stop()，会把别的会话正在跑的回答一起杀掉。
+     * 现在优先调引擎的 android/session/stop（agent.cancel）；扩展不可用时才退回全局停止。
+     */
+    suspend fun stop(sessionId: String) {
+        val sdk = engine.sdkIfReady()
+        val cancelled = sdk != null && runCatching {
+            sdk.request("android/session/stop", buildJsonObject { put("sessionId", sessionId) })
+            true
+        }.getOrDefault(false)
+        if (cancelled) {
+            dao.setRunning(sessionId, false)
+            autoContinued.remove(sessionId)
+            appendLocal(sessionId, "app/stopped", JsonObject(emptyMap()))
+            mutate(sessionId) { it.idle() }
+        } else {
+            stopEngine()
+        }
+    }
 
     /**
      * Restarts the engine (Doctor, an API key change). Same as [stop] for the runs it kills: they

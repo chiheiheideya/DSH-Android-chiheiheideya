@@ -283,6 +283,15 @@ export function importSessions({ dir, home, cwd, writeLog = false, dryRun = fals
 /** 引擎插件入口：注册 `android/session/import`，并把结果写到 import-result.json 供 App 落库。 */
 export function setupSessionImport(ctx, { home, cwd }) {
   const methods = new Map()
+  // 只取消一个会话的回答（agent.cancel），不再用 shutdown 把整个引擎停掉
+  methods.set('android/session/stop', async (params = {}) => {
+    const id = params?.sessionId
+    if (typeof id !== 'string' || id === '') throw new TypeError('android/session/stop requires a sessionId string')
+    const agents = ctx.get('agents')
+    const agent = agents?.get?.(id) ?? agents?.list?.().find(a => String(a.session?.id) === id)
+    if (agent && agent.status === 'running') agent.cancel({ kind: 'user' })
+    return {}
+  })
   methods.set(METHOD, async (params = {}) => {
     const dir = typeof params.dir === 'string' && params.dir !== '' ? params.dir : path.join(home, 'android', 'import-sessions')
     if (!fs.existsSync(dir)) return { dir, sessions: [], missing: true }
