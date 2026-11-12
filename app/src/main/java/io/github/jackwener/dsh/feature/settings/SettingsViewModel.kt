@@ -297,16 +297,25 @@ class SettingsViewModel @Inject constructor(
      * 文案直接告诉用户结果；成功的会话会立即出现在列表里。
      */
     fun importPickedFolder(uri: android.net.Uri, onDone: (String) -> Unit) = viewModelScope.launch {
+        var restartAfter = false
         val msg = runCatching {
             val staged = io.github.jackwener.dsh.core.platform.DataTransfer.stageFromTree(context, uri).getOrThrow()
             val added = sessions.importStagedSessions()
             when {
                 added > 0 -> "已导入 " + added + " 个会话"
-                added == -1 -> "已暂存 " + staged + " 个文件；没有发现可导入的会话目录"
+                added == -1 -> {
+                    // 整包（没有会话目录）：立刻自动重启进恢复，用户不用手动重开
+                    restartAfter = true
+                    "正在恢复全部数据，应用会自动重开（不用手动操作）…"
+                }
                 else -> "导入失败，日志里有原因"
             }
         }.getOrElse { "导入失败：" + (it.message ?: "未知错误") }
         onDone(msg)
+        if (restartAfter) {
+            kotlinx.coroutines.delay(700)
+            io.github.jackwener.dsh.core.platform.DataTransfer.restartIntoRestore(context)
+        }
     }
 
     fun runDoctor() = viewModelScope.launch {

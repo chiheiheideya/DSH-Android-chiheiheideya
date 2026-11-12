@@ -153,6 +153,17 @@ object DataTransfer {
     }
 
     /**
+     * 整包导入完成后调用：**自动重启**进恢复流程，用户不需要手动划掉重开。
+     * 重启后 [applyPending] 在启动最早期恢复数据（小目录同步、大目录后台），用户看到的就是“导入完成”。
+     */
+    fun restartIntoRestore(ctx: Context) {
+        val intent = android.content.Intent(ctx, io.github.jackwener.dsh.MainActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        runCatching { ctx.startActivity(intent) }
+        runCatching { android.os.Process.killProcess(android.os.Process.myPid()) }
+    }
+
+    /**
      * 进程启动最早期调用：有暂存数据就恢复。
      *
      * 以前这里**同步**复制全部 section（含 1GB+ 的 files），大包会让启动卡死/闪退。
@@ -259,21 +270,22 @@ object DataTransfer {
  * （以前整包恢复是启动早期同步复制，大包会卡死；现在大目录放后台，靠这个闸门保证一致性。）
  */
 object RestoreGuard {
-    @Volatile private var running = false
+    private val _running = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val running: kotlinx.coroutines.flow.StateFlow<Boolean> = _running
 
     /** null = 没恢复过；true/false = 上次恢复成功/失败。 */
     @Volatile var lastOk: Boolean? = null
 
-    val isRunning: Boolean get() = running
+    val isRunning: Boolean get() = _running.value
 
-    fun begin() { running = true; lastOk = null }
+    fun begin() { _running.value = true; lastOk = null }
 
-    fun end(ok: Boolean) { lastOk = ok; running = false }
+    fun end(ok: Boolean) { lastOk = ok; _running.value = false }
 
     /** 等恢复结束（默认最多 3 分钟）。 */
-    suspend fun await(timeoutMs: Long = 180_000L) {
-        if (!running) return
+    suspend fun await(timeoutMs: Long = 300_000L) {
+        if (!_running.value) return
         val until = System.currentTimeMillis() + timeoutMs
-        while (running && System.currentTimeMillis() < until) kotlinx.coroutines.delay(200)
+        while (_running.value && System.currentTimeMillis() < until) kotlinx.coroutines.delay(200)
     }
 }
