@@ -476,10 +476,8 @@ class SessionStore @Inject constructor(
     suspend fun prompt(sessionId: String, rawText: String, ruleId: Long? = null) {
         val now = System.currentTimeMillis()
         val existing = dao.get(sessionId)
-        // 从旧版本导入的会话：第一次发消息时把历史摘要带上；上下文过了 80% 时先让模型整理清单问用户
-        val text = withImportedContext(sessionId, rawText).let { t ->
-            contextPressureNote(sessionId, existing?.model)?.let { note -> note + t } ?: t
-        }
+        // 从旧版本导入的会话：第一次发消息时把历史摘要一并带上（上下文整理由 persona 规则约束）
+        val text = withImportedContext(sessionId, rawText)
         val live = flowOf(sessionId).value
         attempts.merge(sessionId, 1, Int::plus)
         val appPrompt = text.startsWith(APP_PROMPT_PREFIX)

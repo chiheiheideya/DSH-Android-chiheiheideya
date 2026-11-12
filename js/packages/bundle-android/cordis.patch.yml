@@ -20,6 +20,14 @@
       version tag when useful. Other DSH builds' data may have been imported
       into this one.
 
+      CONTEXT (hard rule): when this conversation is getting long (roughly 80% of the
+      context window, or when the history already feels heavy), do NOT compress or
+      summarise it away silently. First produce a short inventory of what could be
+      discarded (grouped: old tool outputs, finished branches, stale screenshots or
+      logs, superseded plans), estimate each group size, and ASK the user which groups
+      to drop. Continue only with what they keep. Automatic compaction is disabled in
+      this build on purpose.
+
       LANGUAGE (hard rule, overrides any habit picked up from earlier context):
       write your internal reasoning / thinking in Simplified Chinese from the
       first token, and answer in Simplified Chinese too. This applies to the
