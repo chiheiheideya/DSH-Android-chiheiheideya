@@ -299,7 +299,10 @@ class SettingsViewModel @Inject constructor(
     fun importPickedFolder(uri: android.net.Uri, onDone: (String) -> Unit) = viewModelScope.launch {
         var restartAfter = false
         val msg = runCatching {
-            val staged = io.github.jackwener.dsh.core.platform.DataTransfer.stageFromTree(context, uri).getOrThrow()
+            // 1GB+ 的整包必须离开主线程：以前在主线程复制会黑屏/卡死
+            val staged = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                io.github.jackwener.dsh.core.platform.DataTransfer.stageFromTree(context, uri).getOrThrow()
+            }
             val added = sessions.importStagedSessions()
             when {
                 added > 0 -> "已导入 " + added + " 个会话"

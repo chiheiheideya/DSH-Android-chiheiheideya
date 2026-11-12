@@ -173,7 +173,12 @@ object DataTransfer {
      */
     fun applyPending(ctx: Context) {
         val marker = File(ctx.filesDir, PENDING)
-        if (!marker.exists()) return
+        if (!marker.exists()) {
+            // 没有标记却有暂存目录 = 上次导入被中断（复制到一半）：清掉，避免占空间/误导
+            val orphan = File(ctx.filesDir, STAGING)
+            if (orphan.isDirectory) runCatching { orphan.deleteRecursively() }
+            return
+        }
         val staging = File(ctx.filesDir, STAGING)
         if (!staging.isDirectory) { marker.delete(); return }
         val dataRoot = ctx.filesDir.parentFile ?: run { marker.delete(); return }
