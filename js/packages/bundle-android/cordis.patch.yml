@@ -182,3 +182,13 @@
         # The completion page in the in-app sign-in WebView opens this app link.
         appScheme: dsh-android-dev
         appPackage: !!js "process.env.DSH_ANDROID_PACKAGE || ''"
+
+# ── 上下文压缩：不自动压缩，交给用户决定 ──────────────────────────────────
+# 引擎默认 thresholdRatio=0.8：上下文到 80% 就自动压缩，悄悄丢掉旧内容。
+# 这里关掉自动压缩（auto: false）：到 80% 时由 App 提示，让模型先整理「可丢弃清单」并询问用户，
+# 用户确认后再决定丢弃什么（也可以手动 /compact）。
+- id: compaction-basic
+  config:
+    auto: false
+    thresholdRatio: 0.8
+    retainRatio: 0.2
