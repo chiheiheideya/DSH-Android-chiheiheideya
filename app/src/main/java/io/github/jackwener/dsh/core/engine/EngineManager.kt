@@ -193,6 +193,8 @@ class EngineManager @Inject constructor(
      * the credential / failed-route checks apply to that route, not to the default.
      */
     suspend fun sdk(route: EngineRoute?): JsonRpcPeer = mutex.withLock {
+        // 整包数据还在后台恢复时不要起引擎（会读到半截的 dsh-home）
+        io.github.jackwener.dsh.core.platform.RestoreGuard.await()
         val st = settings.current()
         val hasKey = secrets.read() != null
         val peer = sdk?.takeIf { _state.value == EngineState.Ready }?.let { peer ->
@@ -228,6 +230,7 @@ class EngineManager @Inject constructor(
 
     /** A ready peer for control traffic (account login, profile); never restarts a running engine. */
     suspend fun control(): JsonRpcPeer = mutex.withLock {
+        io.github.jackwener.dsh.core.platform.RestoreGuard.await()
         sdk?.takeIf { _state.value == EngineState.Ready } ?: startLocked(settings.current(), secrets.read() != null)
     }
 

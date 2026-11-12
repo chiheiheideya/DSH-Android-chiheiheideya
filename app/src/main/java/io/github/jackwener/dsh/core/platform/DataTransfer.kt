@@ -27,15 +27,19 @@ object DataTransfer {
 
     private const val STAGING = "restore-staging"
     private const val PENDING = "restore-pending"
-    private val EXPORT_SECTIONS = listOf("databases", "shared_prefs", "files", "app_webview")
-    private val IMPORT_SECTIONS = listOf("databases", "shared_prefs", "files")
+    private val EXPORT_SECTIONS = listOf("databases", "shared_prefs", "app_webview")
+    /** files 下真正属于"数据"的子目录（engine/bin/certs 是运行时产物，不搬）。 */
+    private val EXPORT_FILE_DIRS = listOf("dsh-home", "home")
+    /** 启动早期必须同步完成的（databases 要在 Room 打开前就位）。 */
+    private val IMPORT_SMALL = listOf("databases", "shared_prefs", "app_webview")
 
     /** 导出到 Download/数据导出，返回 (目录, 文件数)。边复制边更新 [progress]（几 GB 时也能看到 128/400MB）。 */
     fun exportToDownloads(ctx: Context): Result<Pair<String, Int>> = runCatching {
         val root = ctx.filesDir.parentFile ?: error("找不到应用数据目录")
         val out = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "数据导出")
         if (!out.exists() && !out.mkdirs()) error("无法创建 " + out.absolutePath)
-        val total = EXPORT_SECTIONS.sumOf { sizeOf(File(root, it)) }
+        val total = EXPORT_SECTIONS.sumOf { sizeOf(File(root, it)) } +
+            EXPORT_FILE_DIRS.sumOf { sizeOf(File(File(root, "files"), it)) }
         progress.value = Progress("正在导出", 0, total)
         try {
             var count = 0
@@ -45,6 +49,16 @@ object DataTransfer {
                 val src = File(root, section)
                 if (!src.exists()) continue
                 val dst = File(out, section)
+                dst.mkdirs()
+                count += copyTree(src, dst) { bytes ->
+                    done += bytes
+                    if (done - lastTick > 4L * 1024 * 1024) { lastTick = done; progress.value = Progress("正在导出", done, total) }
+                }
+            }
+            for (name in EXPORT_FILE_DIRS) {
+                val src = File(File(root, "files"), name)
+                if (!src.exists()) continue
+                val dst = File(File(out, "files"), name)
                 dst.mkdirs()
                 count += copyTree(src, dst) { bytes ->
                     done += bytes
@@ -138,30 +152,61 @@ object DataTransfer {
         }
     }
 
-    /** 进程启动最早期调用：有暂存数据就覆盖回应用数据目录。 */
+    /**
+     * 进程启动最早期调用：有暂存数据就恢复。
+     *
+     * 以前这里**同步**复制全部 section（含 1GB+ 的 files），大包会让启动卡死/闪退。
+     * 现在拆成两段：
+     *  - databases/shared_prefs/app_webview：很小，同步完成（databases 必须在 Room 打开前就位）；
+     *  - files/dsh-home、files/home：后台线程复制到 `*.restore-tmp`，**原子替换**，期间 [RestoreGuard] 让引擎等待。
+     */
     fun applyPending(ctx: Context) {
         val marker = File(ctx.filesDir, PENDING)
         if (!marker.exists()) return
         val staging = File(ctx.filesDir, STAGING)
-        if (!staging.isDirectory) {
-            marker.delete()
-            return
-        }
-        val dataRoot = ctx.filesDir.parentFile ?: run {
-            marker.delete()
-            return
-        }
-        for (section in IMPORT_SECTIONS) {
+        if (!staging.isDirectory) { marker.delete(); return }
+        val dataRoot = ctx.filesDir.parentFile ?: run { marker.delete(); return }
+
+        for (section in IMPORT_SMALL) {
             val src = File(staging, section)
             if (!src.exists()) continue
             val dst = File(dataRoot, section)
             dst.mkdirs()
-            for (f in src.listFiles().orEmpty()) copyInto(f, File(dst, f.name))
+            for (f in src.listFiles().orEmpty()) runCatching { copyInto(f, File(dst, f.name)) }
         }
-        staging.deleteRecursively()
-        marker.delete()
-        ctx.getSharedPreferences("data_transfer", Context.MODE_PRIVATE)
-            .edit().putBoolean("restored", true).apply()
+
+        val bigSrc = File(staging, "files")
+        val dataDirs = EXPORT_FILE_DIRS.filter { File(bigSrc, it).exists() }
+        if (dataDirs.isEmpty()) { finishRestore(ctx); return }
+
+        RestoreGuard.begin()
+        Thread({
+            try {
+                val filesDst = File(dataRoot, "files")
+                for (name in dataDirs) {
+                    val tmp = File(filesDst, "$name.restore-tmp")
+                    tmp.deleteRecursively()
+                    copyInto(File(bigSrc, name), tmp)
+                    val live = File(filesDst, name)
+                    val old = File(filesDst, "$name.restore-old")
+                    old.deleteRecursively()
+                    if (live.exists()) live.renameTo(old)
+                    tmp.renameTo(live)
+                    old.deleteRecursively()
+                }
+                finishRestore(ctx)
+            } catch (e: Throwable) {
+                android.util.Log.w("DataTransfer", "restore files failed", e)
+                RestoreGuard.end(false)
+            }
+        }, "dsh-restore").start()
+    }
+
+    private fun finishRestore(ctx: Context) {
+        File(ctx.filesDir, STAGING).deleteRecursively()
+        File(ctx.filesDir, PENDING).delete()
+        ctx.getSharedPreferences("data_transfer", Context.MODE_PRIVATE).edit().putBoolean("restored", true).apply()
+        RestoreGuard.end(true)
     }
 
     /** 找到「按会话分目录」的导出根（最多向下两层，兼容 SAF 把选中目录也复制一层的情况）。 */
@@ -206,5 +251,29 @@ object DataTransfer {
                 src.inputStream().use { i -> dst.outputStream().use { o -> i.copyTo(o) } }
             }
         }
+    }
+}
+
+/**
+ * 整包恢复的后台状态：恢复进行中时，引擎启动要等它结束，避免读到只复制了一半的 dsh-home。
+ * （以前整包恢复是启动早期同步复制，大包会卡死；现在大目录放后台，靠这个闸门保证一致性。）
+ */
+object RestoreGuard {
+    @Volatile private var running = false
+
+    /** null = 没恢复过；true/false = 上次恢复成功/失败。 */
+    @Volatile var lastOk: Boolean? = null
+
+    val isRunning: Boolean get() = running
+
+    fun begin() { running = true; lastOk = null }
+
+    fun end(ok: Boolean) { lastOk = ok; running = false }
+
+    /** 等恢复结束（默认最多 3 分钟）。 */
+    suspend fun await(timeoutMs: Long = 180_000L) {
+        if (!running) return
+        val until = System.currentTimeMillis() + timeoutMs
+        while (running && System.currentTimeMillis() < until) kotlinx.coroutines.delay(200)
     }
 }
