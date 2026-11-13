@@ -520,22 +520,27 @@ private fun AboutSection(vm: SettingsViewModel) {
             leading = { io.github.jackwener.dsh.core.designsystem.Whale(width = 22.dp) })
         var exportState by remember { mutableStateOf<String?>(null) }
         var importState by remember { mutableStateOf<String?>(null) }
+        // 数据导入（文件夹）：选「数据导出」整包或「按会话分目录」的导出；会话现在就导入完，不用重启。
+        val importPicker = rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+        ) { uri ->
+            if (uri != null) {
+                importState = "正在复制…"
+                vm.importPickedFolder(uri) { msg ->
+                    importState = msg
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         // 全部会话：按会话分目录流式导出（不再整库 JSON，避免 OOM 闪退）
-        SettingsRow("导出会话（仅会话内容）", "每个会话一个子目录（session.json + events.jsonl），可在另一个 DSH 里导入；不含设置与密钥", divider = true,
+        SettingsRow("导出会话（仅会话内容）", "写到「下载/DSH-导出/sessions-export/」：每个会话一个子目录，可在另一个 DSH 里导入；不含设置与密钥", divider = true,
             trailing = { DButton("导出", { exportState = "正在导出会话…"; vm.exportSessions { p ->
                 // 失败就是失败：不再拼「已导出到 导出失败：…」
                 val ok = !p.startsWith("导出失败")
                 exportState = if (ok) "已导出到 " + p else p
                 android.widget.Toast.makeText(context, exportState, android.widget.Toast.LENGTH_LONG).show() } }, variant = BtnVariant.Outline, size = BtnSize.Sm) })
-        SettingsRow("导入会话（仅会话内容）", "选会话导出目录或单个会话文件夹：转换后写进本机会话库，导入完立刻出现在列表里", divider = true,
-            trailing = { DButton("导入", { importState = "正在导入会话…"; vm.importSessions { n ->
-                val msg = when {
-                    n < -1 -> "导入失败，日志里有原因"
-                    n < 0 -> "没找到「下载/DSH-Android/sessions-export」"
-                    else -> "已导入 " + n + " 个会话"
-                }
-                importState = msg
-                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show() } }, variant = BtnVariant.Outline, size = BtnSize.Sm) })
+        SettingsRow("导入会话（仅会话内容）", "选「导出会话」生成的目录（或其中某个会话文件夹），转换后写进本机会话库，导入完立刻显示", divider = true,
+            trailing = { DButton("选择目录", { importState = "正在导入会话…"; importPicker.launch(null) }, variant = BtnVariant.Outline, size = BtnSize.Sm) })
         // 数据导出（文件夹）：全部会话库、设置、插件、API Key、浏览器 Cookie。
         val transferScope = rememberCoroutineScope()
         // 复制进度（DataTransfer 里按已复制字节更新）：显示「128/400MB」
@@ -560,18 +565,6 @@ private fun AboutSection(vm: SettingsViewModel) {
         }
         exportState?.let { msg ->
             Text(msg, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp), style = DshType.xxs12, color = c.labelTertiary)
-        }
-        // 数据导入（文件夹）：选「数据导出」整包或「按会话分目录」的导出；会话现在就导入完，不用重启。
-        val importPicker = rememberLauncherForActivityResult(
-            androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
-        ) { uri ->
-            if (uri != null) {
-                importState = "正在复制…"
-                vm.importPickedFolder(uri) { msg ->
-                    importState = msg
-                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-                }
-            }
         }
         SettingsRow("导入数据（应用全部数据）", "选「数据导出」整包：恢复设置、密钥、Cookie 与插件，需要重启应用生效；会话请用上面的「导入会话」", divider = true,
             trailing = { DButton("选择文件夹", { importPicker.launch(null) }, variant = BtnVariant.Outline, size = BtnSize.Sm) })
