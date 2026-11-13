@@ -893,12 +893,12 @@ class SessionStore @Inject constructor(
      * 所以先试写一次；不行就退回 App 专属目录 `/sdcard/Android/data/com.dsh.chiheiheideya/files/`（必定可写）。
      */
     private fun sessionsExportDir(): File {
-        // 用户要能在文件管理器里拿到导出：写 Download 下的本 App 专属目录。
-        // 旧目录若是别的构建创建的会 EACCES，所以先删掉、由本 App 重新创建。
-        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DSH-导出").resolve("sessions-export")
-        if (dir.exists()) runCatching { dir.deleteRecursively() }
-        dir.mkdirs()
-        return dir
+        // 每次导出写**新目录**（带时间戳）：老目录里可能残留上次的文件，覆盖删除在部分 ROM 上
+        // 会报 EACCES（vivo/sdcardfs），换新目录就能稳定写入。
+        val base = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DSH-导出")
+        base.mkdirs()
+        val stamp = java.text.SimpleDateFormat("MMdd-HHmm", java.util.Locale.US).format(java.util.Date())
+        return File(base, "sessions-export-$stamp").apply { mkdirs() }
     }
 
     /** 导入/导出暂存目录（App 私有）：引擎侧转换后由 [importSessionsFromStaging] 落库。 */
