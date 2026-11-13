@@ -1,18 +1,18 @@
 {
   "format": 1,
   "packageName": "com.dsh.chiheiheideya",
-  "versionCode": 99,
+  "versionCode": 124,
   "versionName": "0.4.0",
   "minSdk": 29,
   "apk": {
     "name": "app-debug.apk",
-    "size": 117170730,
-    "sha256": "ec0862550eb3060a47b705f593ded73cfc8a8124ea32306497ecd8c29252c379",
+    "size": 117212102,
+    "sha256": "db506172216c888a9e28738f20dc420667e5f055540f358f8e57a3c23ff26d9a",
     "urls": [
       "https://github.com/chiheiheideya/DSH-Android-chiheiheideya/releases/download/v0.4.0/app-debug.apk"
     ]
   },
   "signerSha256": "d71bbd1a64ea19df80dbb5db9200f30da172d9f78643c424c739732955748f55",
   "notes": {},
-  "publishedAt": "2026-11-11T08:49:15Z"
+  "publishedAt": "2026-11-13T06:59:28Z"
 }
