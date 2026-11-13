@@ -196,8 +196,9 @@ private fun ConversationPane(vm: HomeViewModel, onMenu: () -> Unit, onSettings: 
         var transferHint by remember { mutableStateOf(!promptPrefs.getBoolean("transfer_hint_dismissed", false)) }
         if (transferHint) {
             Row(Modifier.fillMaxWidth().clip(Radius.panel).background(c.bgLayer2).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("导入/导出 会话点我", Modifier.weight(1f).clickable { runCatching { onMenu() } }, style = DshType.xs13, color = c.labelPrimary)
-                Text("导入/导出", Modifier.padding(horizontal = 10.dp), style = DshType.xs13, color = c.labelSecondary)
+                // 直接进 设置 → 关于（导入/导出都在这页）
+                Text("导入/导出 会话点我", Modifier.weight(1f).clickable { onSettings("About") }, style = DshType.xs13, color = c.labelPrimary)
+                Text("导入/导出", Modifier.padding(horizontal = 10.dp).clickable { onSettings("About") }, style = DshType.xs13, color = c.labelSecondary)
                 io.github.jackwener.dsh.core.designsystem.DButton("知道了", {
                     promptPrefs.edit().putBoolean("transfer_hint_dismissed", true).apply()
                     transferHint = false
