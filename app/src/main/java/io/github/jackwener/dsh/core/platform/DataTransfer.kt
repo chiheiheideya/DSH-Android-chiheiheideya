@@ -31,7 +31,9 @@ object DataTransfer {
     /** files 下真正属于"数据"的子目录（engine/bin/certs 是运行时产物，不搬）。 */
     private val EXPORT_FILE_DIRS = listOf("dsh-home", "home")
     /** 启动早期必须同步完成的（databases 要在 Room 打开前就位）。 */
-    private val IMPORT_SMALL = listOf("databases", "shared_prefs", "app_webview")
+    // 不恢复 databases：旧实例的会话库与本 App 的 schema/清理逻辑不一致（会被清空），
+    // 会话请用「按会话分目录」的导出走导入器，才能可靠写进本机会话库。
+    private val IMPORT_SMALL = listOf("shared_prefs", "app_webview")
 
     /** 导出到 Download/数据导出，返回 (目录, 文件数)。边复制边更新 [progress]（几 GB 时也能看到 128/400MB）。 */
     fun exportToDownloads(ctx: Context): Result<Pair<String, Int>> = runCatching {
