@@ -193,6 +193,28 @@ object DataTransfer {
             for (f in src.listFiles().orEmpty()) runCatching { copyInto(f, File(dst, f.name)) }
         }
 
+        // shared_prefs 里记的是旧包的绝对路径（例如会话的工作目录 cwd），本包打开会失效
+        // → 恢复后把旧包名替换成本包名（只在 App 启动早期、Room 还没打开时做）。
+        runCatching {
+            val prefsDir = File(dataRoot, "shared_prefs")
+            prefsDir.listFiles()?.forEach { f ->
+                if (f.isFile && f.name.endsWith(".xml")) {
+                    val t = f.readText()
+                    if (t.contains("io.github.jackwener.dsh.dev")) {
+                        f.writeText(t.replace("io.github.jackwener.dsh.dev", ctx.packageName))
+                    }
+                }
+            }
+        }
+        // 旧包路径替换：恢复的 shared_prefs 里记的是旧包的绝对路径（会话 cwd 等），本包打开会失效
+        runCatching {
+            File(dataRoot, "shared_prefs").listFiles()?.forEach { f ->
+                if (f.isFile && f.name.endsWith(".xml")) {
+                    val t = f.readText()
+                    if (t.contains("io.github.jackwener.dsh.dev")) f.writeText(t.replace("io.github.jackwener.dsh.dev", ctx.packageName))
+                }
+            }
+        }
         val bigSrc = File(staging, "files")
         val dataDirs = EXPORT_FILE_DIRS.filter { File(bigSrc, it).exists() }
         if (dataDirs.isEmpty()) { finishRestore(ctx); return }
