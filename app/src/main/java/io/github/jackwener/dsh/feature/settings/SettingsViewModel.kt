@@ -307,18 +307,14 @@ class SettingsViewModel @Inject constructor(
             when {
                 added > 0 -> "已导入 " + added + " 个会话"
                 added == -1 -> {
-                    // 整包（没有会话目录）：立刻自动重启进恢复，用户不用手动重开
-                    restartAfter = true
-                    "正在恢复全部数据，应用会自动重开（不用手动操作）…"
+                    // 整包（设置/密钥/插件）：重启应用后生效；会话用「导入会话」可直接显示
+                    "应用数据已暂存，重启应用后生效（会话请用「导入会话」— 导入后立刻显示）"
                 }
                 else -> "导入失败，日志里有原因"
             }
         }.getOrElse { "导入失败：" + (it.message ?: "未知错误") }
         onDone(msg)
-        if (restartAfter) {
-            kotlinx.coroutines.delay(700)
-            io.github.jackwener.dsh.core.platform.DataTransfer.restartIntoRestore(context)
-        }
+
     }
 
     fun runDoctor() = viewModelScope.launch {

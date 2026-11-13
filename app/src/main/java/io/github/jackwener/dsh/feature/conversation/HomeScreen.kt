@@ -180,18 +180,36 @@ private fun ConversationPane(vm: HomeViewModel, onMenu: () -> Unit, onSettings: 
         // 这是系统行为、App 无法自行重开。这里只在"版本变了 + 无障碍掉了"时提示一次。
         val lastBuild = promptPrefs.getInt("last_build", 0)
         val a11yLost = io.github.jackwener.dsh.service.DshAccessibilityService.instance == null
+        // 首次安装：提示一次「开启无障碍」；更新后（版本号变了）也提示一次。
+        // 用 a11y_prompt_build 记录"这个版本已经提示过"，同一版本不会反复弹。
+        val a11yFresh = lastBuild == 0
         var a11yLostPrompt by remember {
             mutableStateOf(
-                a11yLost && lastBuild in 1 until io.github.jackwener.dsh.BuildConfig.VERSION_CODE &&
-                    promptPrefs.getInt("a11y_prompt_build", 0) != io.github.jackwener.dsh.BuildConfig.VERSION_CODE
+                a11yLost && promptPrefs.getInt("a11y_prompt_build", 0) != io.github.jackwener.dsh.BuildConfig.VERSION_CODE &&
+                    (a11yFresh || lastBuild < io.github.jackwener.dsh.BuildConfig.VERSION_CODE)
             )
         }
         androidx.compose.runtime.LaunchedEffect(Unit) {
             promptPrefs.edit().putInt("last_build", io.github.jackwener.dsh.BuildConfig.VERSION_CODE).apply()
         }
+        // 顶部浮条：提醒用户导入/导出的入口（点「知道了」永久记住，不再出现）
+        var transferHint by remember { mutableStateOf(!promptPrefs.getBoolean("transfer_hint_dismissed", false)) }
+        if (transferHint) {
+            Row(Modifier.fillMaxWidth().clip(Radius.panel).background(c.bgLayer2).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("导入/导出 会话点我", Modifier.weight(1f).clickable { runCatching { onMenu() } }, style = DshType.xs13, color = c.labelPrimary)
+                Text("导入/导出", Modifier.padding(horizontal = 10.dp), style = DshType.xs13, color = c.labelSecondary)
+                io.github.jackwener.dsh.core.designsystem.DButton("知道了", {
+                    promptPrefs.edit().putBoolean("transfer_hint_dismissed", true).apply()
+                    transferHint = false
+                }, size = io.github.jackwener.dsh.core.designsystem.BtnSize.Sm)
+            }
+        }
         if (a11yLostPrompt) {
             Row(Modifier.fillMaxWidth().clip(Radius.panel).background(c.bgLayer2).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("App 更新后，Android 会把无障碍服务自动关掉（系统安全机制，和前台/后台无关）。重新开一次即可。", Modifier.weight(1f), style = DshType.xs13, color = c.labelSecondary)
+                Text(
+                    if (a11yFresh) "开启无障碍后，DSH 才能读屏、点按和输入（替你操作 App）。点「去开启」在系统设置里打开即可。"
+                    else "App 刚更新过，Android 自动关闭了无障碍（系统的安全机制，与前台/后台无关）。重新开启一次，DSH 才能继续读屏和点按。",
+                    Modifier.weight(1f), style = DshType.xs13, color = c.labelSecondary)
                 io.github.jackwener.dsh.core.designsystem.DButton("去开启", {
                     runCatching { bannerCtx.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
                     promptPrefs.edit().putInt("a11y_prompt_build", io.github.jackwener.dsh.BuildConfig.VERSION_CODE).apply()
@@ -225,20 +243,7 @@ private fun ConversationPane(vm: HomeViewModel, onMenu: () -> Unit, onSettings: 
             IconBtn(R.drawable.dsw_panel_left_outline, onMenu, size = 40.dp, iconSize = 18.dp, tint = c.labelPrimary, contentDescription = stringResource(R.string.open_sidebar))
             Text(if (empty) "" else live.title.ifBlank { conv.turns.firstOrNull()?.user?.text?.lineSequence()?.firstOrNull() ?: stringResource(R.string.new_session) },
                 Modifier.weight(1f).padding(horizontal = 4.dp), style = DshType.s14m, color = c.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            // Every conversation can import / export a Markdown transcript (left of the search icon).
-            if (!empty) {
-                IconBtn(R.drawable.dsw_paperclip_outline, { importMd.launch(arrayOf("text/markdown", "text/plain", "application/octet-stream")) }, size = 40.dp, iconSize = 18.dp,
-                    tint = c.labelSecondary, contentDescription = "导入 markdown 对话")
-                IconBtn(R.drawable.dsw_download_outline, {
-                    // Cookies / API keys in the conversation: ask which may go into the file first.
-                    scope.launch {
-                        val hits = runCatching { vm.scanPrivacy() }.getOrDefault(emptyList())
-                        if (hits.isEmpty()) vm.exportMarkdown { path -> android.widget.Toast.makeText(toastContext, "已导出（含全部对话事件与同名 .json）：" + path, android.widget.Toast.LENGTH_LONG).show() }
-                        else privacyHits = hits
-                    }
-                }, size = 40.dp, iconSize = 18.dp,
-                    tint = c.labelSecondary, contentDescription = "导出 markdown 对话")
-            }
+            // （按用户要求：导入/导出入口统一挪到 设置 → 关于，主页不再放这两个按钮）
             privacyHits?.let { hits ->
                 PrivacyExportDialog(hits, onCancel = { privacyHits = null }) { chosen ->
                     privacyHits = null
