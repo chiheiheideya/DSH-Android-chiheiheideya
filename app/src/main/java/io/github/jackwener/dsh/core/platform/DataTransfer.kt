@@ -204,7 +204,17 @@ object DataTransfer {
                 for (name in dataDirs) {
                     val tmp = File(filesDst, "$name.restore-tmp")
                     tmp.deleteRecursively()
-                    copyInto(File(bigSrc, name), tmp)
+                    if (name == "dsh-home") {
+                        // 引擎日志（dsh-home/sessions）里记的是旧实例的工作目录，跨包恢复会让会话
+                        // 报 working-directory 不存在；会话由「导入会话」重建日志，这里跳过。
+                        tmp.mkdirs()
+                        for (f in File(bigSrc, name).listFiles().orEmpty()) {
+                            if (f.name == "sessions") continue
+                            copyInto(f, File(tmp, f.name))
+                        }
+                    } else {
+                        copyInto(File(bigSrc, name), tmp)
+                    }
                     val live = File(filesDst, name)
                     val old = File(filesDst, "$name.restore-old")
                     old.deleteRecursively()

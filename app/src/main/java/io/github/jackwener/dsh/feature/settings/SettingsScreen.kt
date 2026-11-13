@@ -516,8 +516,20 @@ private fun AboutSection(vm: SettingsViewModel) {
     LaunchedEffect(Unit) { vm.runDoctor() }
     Spacer(Modifier.height(8.dp))
     SettingsCard {
-        SettingsRow("DSH", stringResource(R.string.version, BuildConfig.VERSION_NAME) + " · build " + BuildConfig.VERSION_CODE, divider = false,
-            leading = { io.github.jackwener.dsh.core.designsystem.Whale(width = 22.dp) })
+        // 安装检测：静默安装（Dhizuku/pm）完成后，当前进程仍是旧版本，这里提示重启
+        val installedBuild = remember {
+            runCatching { context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode }.getOrDefault(0L)
+        }
+        val newerInstalled = installedBuild > io.github.jackwener.dsh.BuildConfig.VERSION_CODE.toLong()
+        SettingsRow(if (newerInstalled) "已安装新版本（build " + installedBuild + "）" else "DSH",
+            if (newerInstalled) "重启应用后生效（当前运行 build " + io.github.jackwener.dsh.BuildConfig.VERSION_CODE + "）"
+            else stringResource(R.string.version, BuildConfig.VERSION_NAME) + " · build " + BuildConfig.VERSION_CODE, divider = false,
+            leading = { io.github.jackwener.dsh.core.designsystem.Whale(width = 22.dp) },
+            trailing = {
+                if (newerInstalled) io.github.jackwener.dsh.core.designsystem.DButton("重启应用", {
+                    io.github.jackwener.dsh.core.platform.DataTransfer.restartIntoRestore(context)
+                }, variant = BtnVariant.Outline, size = BtnSize.Sm)
+            })
         var exportState by remember { mutableStateOf<String?>(null) }
         var importState by remember { mutableStateOf<String?>(null) }
         // 数据导入（文件夹）：选「数据导出」整包或「按会话分目录」的导出；会话现在就导入完，不用重启。
