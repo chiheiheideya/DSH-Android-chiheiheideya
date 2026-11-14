@@ -204,17 +204,39 @@ export function frameLog(lines) {
 /** 从 repaired 行里抽「用户/助手」文本（工具调用、思考块不进记忆，只保对话）。 */
 function chatText(rows) {
   const out = [];
+  const pick = (c) => Array.isArray(c) ? c.filter(b => b && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join('').trim() : ''
+  const cut = (t, n) => (t || '').length > n ? t.slice(0, n) + '…' : (t || '')
+  // 参数摘要：挑几个短字段，避免把整段 JSON 塞进来
+  const argBrief = (a) => {
+    if (!a || typeof a !== 'object') return ''
+    const parts = []
+    for (const [k, v] of Object.entries(a)) {
+      if (v == null || typeof v === 'object') continue
+      parts.push(k + '=' + cut(String(v), 120))
+      if (parts.length >= 4) break
+    }
+    return parts.join(', ')
+  }
   for (const r of rows) {
-    if (typeof r.seq !== 'number' || r.seq < 0) continue;
+    if (typeof r.seq !== 'number' || r.seq < 0) continue
     let d
     try { d = JSON.parse(r.json) } catch { continue }
-    const pick = (c) => Array.isArray(c) ? c.filter(b => b && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join('').trim() : ''
     if (r.type === 'user/message') {
       const t = pick(d.content)
       if (t) out.push({ role: 'user', text: t })
     } else if (r.type === 'assistant/message') {
       const t = pick(d.message?.content)
       if (t) out.push({ role: 'assistant', text: t })
+    } else if (r.type === 'tool/call') {
+      // 工具调用：压缩成一行文本，保留"做了什么"，让模型知道当时查过什么
+      const name = d.name || d.tool || d.toolName || '?'
+      const brief = argBrief(d.args || d.arguments || d.input)
+      out.push({ role: 'assistant', text: '〔调用 ' + name + (brief ? ': ' + brief : '') + '〕' })
+    } else if (r.type === 'tool/result') {
+      // 工具结果：只留前 400 字，避免日志爆炸
+      const content = pick(d.content) || (typeof d.result === 'string' ? d.result : '') || (typeof d.output === 'string' ? d.output : '')
+      const t = cut(content, 400)
+      if (t) out.push({ role: 'assistant', text: '〔结果〕' + t })
     }
   }
   return out
