@@ -194,16 +194,30 @@ class SessionStore @Inject constructor(
             // 而导入是本地操作，不该依赖登录 —— 之前"导入失败"就是这个原因）。
             val sdk = engine.control()
             var done = 0
+            var failed = 0
+            val failures = StringBuilder()
             for (sessionDir in sessions) {
                 importProgress.value = ImportProgress(done, sessions.size, sessionDir.name)
-                val result = sdk.request("android/session/import", buildJsonObject {
-                    put("dir", dir.absolutePath)
-                    put("only", sessionDir.name) // 一次一个会话：请求短、能报进度
-                    put("writeLog", true) // 写完整日志：模型能看到全部历史（不只是摘要）
-                })
-                writeImportedSession(result as? JsonObject)
+                // 单个会话失败不影响其它会话（以前一个抛错整批中止，只导进去前几个）
+                runCatching {
+                    val result = sdk.request("android/session/import", buildJsonObject {
+                        put("dir", dir.absolutePath)
+                        put("only", sessionDir.name) // 一次一个会话：请求短、能报进度
+                        put("writeLog", true) // 写完整日志：模型能看到全部历史（不只是摘要）
+                    })
+                    writeImportedSession(result as? JsonObject)
+                }.onFailure { e ->
+                    failed++
+                    failures.append(sessionDir.name).append(": ")
+                        .append(e.message ?: e.javaClass.simpleName).append("\n")
+                    android.util.Log.w(TAG, "session import failed: " + sessionDir.name, e)
+                }
                 done++
                 importProgress.value = ImportProgress(done, sessions.size, sessionDir.name)
+            }
+            if (failed > 0) {
+                runCatching { errorFile.writeText(failures.toString()) }
+                transferError.value = "导入完成：" + (done - failed) + " 个成功，" + failed + " 个失败（原因见 导入/导出日志）"
             }
             // 处理过的目录挪走，避免每次启动重复导入
             dir.renameTo(File(dir.parentFile, "import-sessions-done-" + System.currentTimeMillis()))
