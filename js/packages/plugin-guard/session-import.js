@@ -248,7 +248,7 @@ export function buildResumeLog(rows, { id, createdAt, cwd }) {
         push('step/start', { turn, step: 1 })
         open = true
       }
-      push('assistant/message', { turn, step: 1, message: { id: crypto.randomUUID(), role: 'assistant', content: [{ type: 'text', text: m.text }], source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-chat', replayState: { response: { kind: 'deepseek-messages', version: 1, model: 'deepseek-chat' }, blocks: [{ type: 'text' }] } } } }, { surfaceOp: 'append' })
+      push('assistant/message', { turn, step: 1, stream: [], message: { id: crypto.randomUUID(), role: 'assistant', content: [{ type: 'text', text: m.text }], source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-chat', replayState: { response: { kind: 'deepseek-messages', version: 1, model: 'deepseek-chat' }, blocks: [{ type: 'text' }] } } } }, { surfaceOp: 'append' })
     }
   }
   closeTurn()
@@ -287,8 +287,9 @@ function storeAttachments(attachmentsDir, referenced, objectsDir) {
 export function importSessions({ dir, home, cwd, writeLog = false, dryRun = false, only = null }) {
   if (typeof dir !== 'string' || dir === '') throw new TypeError(`${METHOD} requires a dir string`)
   if (!fs.existsSync(dir)) throw new Error(`${METHOD}: no such directory: ${dir}`)
-  const projectKey = cwd.replace(/[^A-Za-z0-9]/g, '-').replace(/^-+|-+$/g, '') // 与 App/引擎的项目目录命名一致
-  const sessionsDir = path.join(home, 'sessions', `--${projectKey}--`)
+  // 引擎的项目目录名 = `--` + cwd 去掉首尾斜杠、把每个 `/` 换成 `-` + `--`（点要保留！）
+  const projectKey = '--' + cwd.replace(/^\/+|\/+$/g, '').replace(/\//g, '-') + '--'
+  const sessionsDir = path.join(home, 'sessions', projectKey)
   const rowsDir = path.join(home, 'android', 'import-rows')
   const objectsDir = path.join(home, 'attachments', 'v1', 'objects')
   const results = []

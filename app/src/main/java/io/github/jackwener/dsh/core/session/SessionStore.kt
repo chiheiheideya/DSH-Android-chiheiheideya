@@ -199,7 +199,7 @@ class SessionStore @Inject constructor(
                 val result = sdk.request("android/session/import", buildJsonObject {
                     put("dir", dir.absolutePath)
                     put("only", sessionDir.name) // 一次一个会话：请求短、能报进度
-                    put("writeLog", false) // 只读式：重建日志还没过引擎校验，先保证导入后能正常使用
+                    put("writeLog", true) // 写完整日志：模型能看到全部历史（不只是摘要）
                 })
                 writeImportedSession(result as? JsonObject)
                 done++
