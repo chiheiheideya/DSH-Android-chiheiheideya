@@ -533,7 +533,7 @@ class SessionStore @Inject constructor(
             val request = buildJsonObject {
                 put("sessionId", sessionId)
                 putJsonArray("contentBlocks") {
-                    addJsonObject { put("type", "text"); put("text", if (dao.events(sessionId).isEmpty()) "请全程用简体中文思考和回答。\n\n" + text else text) }
+                    addJsonObject { put("type", "text"); put("text", text) } // 不再往用户消息里拼「请全程用中文」前缀（会显示在聊天记录里）
                 }
             }
             try {
