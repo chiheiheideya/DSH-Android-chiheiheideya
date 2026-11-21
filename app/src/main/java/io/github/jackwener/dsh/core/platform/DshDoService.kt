@@ -106,17 +106,23 @@ class DshDoService(private val mContext: Context?) : Binder() {
                 "stay_off" -> { m.setGlobalSetting(a, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, "0"); "Success" }
                 "list_hidden", "list_suspended", "list_blocked" -> {
                     val pm = mContext!!.packageManager
-                    // Hidden packages are disabled for the user, so getInstalledApplications(0)
-                    // never returns them (list_hidden was always empty). MATCH_UNINSTALLED_PACKAGES
-                    // includes them, and keeps suspended/blocked lists complete too.
-                    val flags = android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES
-                    val pkgs = pm.getInstalledApplications(flags).map { it.packageName }
+                    val pkgs = pm.getInstalledApplications(0).map { it.packageName }
                     val which = when (cmd) {
                         "list_hidden" -> pkgs.filter { runCatching { m.isApplicationHidden(a, it) }.getOrDefault(false) }
                         "list_suspended" -> pkgs.filter { runCatching { m.isPackageSuspended(a, it) }.getOrDefault(false) }
                         else -> pkgs.filter { runCatching { m.isUninstallBlocked(a, it) }.getOrDefault(false) }
                     }
                     which.joinToString(",").ifBlank { "（无）" }
+                }
+                "allow_clone" -> {
+                    // 允许用户创建"应用分身/双开"：清除多用户相关限制（DISALLOW_ADD_USER / DISALLOW_USER_SWITCH）
+                    runCatching { m.clearUserRestriction(a, android.os.UserManager.DISALLOW_ADD_USER) }
+                    runCatching { m.clearUserRestriction(a, android.os.UserManager.DISALLOW_USER_SWITCH) }
+                    "Success: 已允许创建应用分身/双开"
+                }
+                "deny_clone" -> {
+                    runCatching { m.addUserRestriction(a, android.os.UserManager.DISALLOW_ADD_USER) }
+                    "Success: 已禁止创建应用分身/双开"
                 }
                 "install_apk" -> installApk(arg)
                 else -> "failed: unknown command $cmd"

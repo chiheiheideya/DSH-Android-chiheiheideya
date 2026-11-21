@@ -98,6 +98,7 @@ class DhizukuTools @Inject constructor(@ApplicationContext private val context: 
             val w = a.str("what") ?: "ping"
             run(when (w) { "hidden" -> "list_hidden"; "suspended" -> "list_suspended"; "blocked" -> "list_blocked"; else -> "ping" })
         },
+        t("dhizuku_allow_clone", ToolGroup.System, Risk.dangerous, "允许用户创建「应用分身/应用双开」：用设备所有者权限清除系统的多用户添加限制。", {}) { _, _ -> run("allow_clone") },
         t("dhizuku_install_apk", ToolGroup.System, Risk.dangerous, "用设备所有者权限静默安装一个 APK（不会弹系统安装确认框）。args: APK 的绝对路径，例如 /sdcard/Download/base.apk；执行前先确认文件存在。", {
             string("path", "APK 文件绝对路径", required = true)
         }) { a, _ -> run("install_apk", a.reqStr("path")) },
