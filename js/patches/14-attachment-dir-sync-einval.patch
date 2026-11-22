@@ -1,17 +1,14 @@
 --- a/@deepseek-ai/dsh-attachment-local/lib/index.js
 +++ b/@deepseek-ai/dsh-attachment-local/lib/index.js
-@@ -400,7 +400,14 @@
- 		throw error;
- 	}
+@@ -401,5 +401,12 @@
  	try {
 -		await handle.sync();
 +		try {
 +			await handle.sync();
 +		} catch (error) {
-+			// DSH-Android: some Android filesystems (FUSE-backed dirs, certain vendor paths) return
-+			// EINVAL/ENOTSUP for fsync on a directory handle. The entry is still published; skip the
-+			// durability barrier instead of failing every image/attachment write.
-+			if (process.platform === "android" && (error?.code === "EINVAL" || error?.code === "ENOTSUP" || error?.code === "EBADF")) return;
++			// DSH-Android: some Android filesystems return EINVAL/ENOTSUP for a directory fsync;
++			// the entry is already published, so skip the durability barrier instead of failing writes.
++			if (process.platform === "android" && (error?.code === "EINVAL" || error?.code === "ENOTSUP")) return;
 +			throw error;
 +		}
  	} finally {
