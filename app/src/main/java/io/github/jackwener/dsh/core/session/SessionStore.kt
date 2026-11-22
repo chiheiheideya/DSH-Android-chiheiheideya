@@ -22,6 +22,7 @@ import io.github.jackwener.dsh.core.engine.TurnWakeLock
 import io.github.jackwener.dsh.core.engine.EngineStartException
 import io.github.jackwener.dsh.core.engine.JsonRpcException
 import io.github.jackwener.dsh.core.engine.NoCredentialsException
+import io.github.jackwener.dsh.core.platform.RecycleBin
 import io.github.jackwener.dsh.core.engine.RpcJson
 import io.github.jackwener.dsh.core.model.PermissionPreset
 import io.github.jackwener.dsh.core.model.Risk
@@ -152,15 +153,11 @@ class SessionStore @Inject constructor(
     /** 回收站里的会话 id（删除先放这里，可恢复；不删数据）。 */
     private val recycled = MutableStateFlow(RecycleBin.entries(context).keys)
 
-    private fun <T> kotlinx.coroutines.flow.Flow<T>.kotlinxFlatMapLatest(transform: suspend (T) -> kotlinx.coroutines.flow.Flow<List<SessionEntity>>): kotlinx.coroutines.flow.Flow<List<SessionEntity>> =
-        kotlinx.coroutines.flow.flatMapLatest(this, transform)
 
-    val conversations: Flow<List<SessionEntity>> =
-        recycled.kotlinxFlatMapLatest { rec: Set<String> ->
-            dao.observeTopLevel().map { rows: List<SessionEntity> ->
-                rows.filter { SessionVisibility.listed(it) && it.id !in rec }
-            }
-        }
+    val conversations: Flow<List<SessionEntity>> = dao.observeTopLevel().map { rows ->
+        val rec: Set<String> = recycled.value
+        rows.filter { SessionVisibility.listed(it) && it.id !in rec }
+    }
 
     init {
         // Rows still marked running belong to a previous app process (both processes died): the
