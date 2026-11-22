@@ -498,15 +498,7 @@ class SessionStore @Inject constructor(
         val existing = dao.get(sessionId)
         val live = flowOf(sessionId).value
         // 从旧版本导入的会话：第一次发消息时把历史摘要一并带上
-        var text = withImportedContext(sessionId, rawText)
-        // 上下文真实占用（输入 + 输出预留）超过 80% 时：先让模型整理「可丢弃清单」并询问用户（每会话一次）
-        run {
-            val used = live.usage.input
-            val reserve = 256_000L
-            if (used > 0 && used + reserve > (DEEPSEEK_CONTEXT_WINDOW * 0.8).toLong() && pressureWarned.add(sessionId)) {
-                text = "〔系统提示：当前上下文约 " + ((used + reserve) / 10_000) + " 万 tokens（含输出预留 " + (reserve / 10_000) + " 万），已接近上限。不要自行压缩。请先整理出可以丢弃的内容清单（按主题/工具输出分组，标注占用），询问用户要丢弃哪些，再回答下面的问题。〕\n\n" + text
-            }
-        }
+        val text = withImportedContext(sessionId, rawText)
         attempts.merge(sessionId, 1, Int::plus)
         val appPrompt = text.startsWith(APP_PROMPT_PREFIX)
         // Steering a running turn (also a queued message sent now) stays part of the same task.
