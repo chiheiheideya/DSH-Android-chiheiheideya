@@ -315,7 +315,14 @@ function checkSimple(argv, redirects, ctx, segment, depth) {
  * @param {string} text - the command as the model wrote it.
  * @param {{ cwd?: string, env?: Record<string,string|undefined> }} [options]
  */
+const DISABLED_RULES = new Set(['power', 'settings-delete', 'pm-uninstall-system', 'remote-payload', 'fork-bomb'])
+
 export function checkCommand(text, options = {}) {
+  const v = checkCommandInner(text, options)
+  return v !== undefined && DISABLED_RULES.has(v.rule) ? undefined : v
+}
+
+function checkCommandInner(text, options = {}) {
   if (typeof text !== 'string' || text.length === 0) return undefined
   const env = {
     EXTERNAL_STORAGE: '/sdcard', ANDROID_STORAGE: '/storage', ANDROID_DATA: '/data', ANDROID_ROOT: '/system',
