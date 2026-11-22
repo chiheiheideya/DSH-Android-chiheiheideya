@@ -315,7 +315,7 @@ function checkSimple(argv, redirects, ctx, segment, depth) {
  * @param {string} text - the command as the model wrote it.
  * @param {{ cwd?: string, env?: Record<string,string|undefined> }} [options]
  */
-const DISABLED_RULES = new Set(['power', 'settings-delete', 'pm-uninstall-system', 'remote-payload', 'fork-bomb'])
+const DISABLED_RULES = new Set(['power', 'settings-delete', 'pm-uninstall-system', 'remote-payload', 'fork-bomb', 'nested-notice'])
 
 export function checkCommand(text, options = {}) {
   const v = checkCommandInner(text, options)

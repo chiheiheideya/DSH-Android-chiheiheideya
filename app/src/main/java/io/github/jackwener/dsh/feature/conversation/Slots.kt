@@ -74,10 +74,10 @@ import io.github.jackwener.dsh.feature.settings.isZh
 
 /** The approval-style card frame: warn border, warn strip, scrolling body, right-aligned actions. */
 @Composable
-private fun AttentionCard(strip: String, answered: Boolean, body: @Composable ColumnScope.() -> Unit, actions: @Composable () -> Unit) {
+private fun AttentionCard(strip: String, answered: Boolean, danger: Boolean = false, body: @Composable ColumnScope.() -> Unit, actions: @Composable () -> Unit) {
     val c = Dsh.colors
     val settled = rememberSettled(400)
-    Column(Modifier.fillMaxWidth().ignoreTapsUntil(settled).elevated(Radius.xl, c.warnSecondary, 6.dp).border(1.dp, c.warnSecondary, Radius.xl).clip(Radius.xl).background(c.inputMajor)) {
+    Column(Modifier.fillMaxWidth().ignoreTapsUntil(settled).elevated(Radius.xl, c.warnSecondary, 6.dp).border(1.dp, c.warnSecondary, Radius.xl).clip(Radius.xl).background(if (danger) c.error.copy(alpha = 0.07f) else c.inputMajor)) {
         Row(Modifier.fillMaxWidth().background(c.warnTertiary).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (answered) Spinner(10.dp, c.warn) else Box(Modifier.size(6.dp).clip(CircleShape).background(c.warn))
             Spacer(Modifier.width(8.dp))
@@ -98,7 +98,7 @@ fun ApprovalCard(a: PendingApproval, onAnswer: (ApprovalOutcome) -> Unit) {
     val info = ToolPresentation.info(a.toolName)
     val pseudo = Block.Tool("", a.callId ?: "", a.toolName, a.arguments ?: "", parseArgs(a.arguments), ToolState.Running, null, null, null, 0, null)
     val summary = ToolPresentation.summary(context, pseudo)
-    AttentionCard(stringResource(R.string.waiting_approval), answered, body = {
+    AttentionCard(stringResource(R.string.waiting_approval), answered, danger = a.risk == Risk.dangerous, body = {
         Text(a.reason?.takeIf { it.isNotBlank() } ?: stringResource(R.string.approval_headline, stringResource(info.title)),
             style = DshType.s14m.copy(fontSize = DshType.base16.fontSize * 0.94f, lineHeight = DshType.base16.lineHeight), color = c.labelPrimary)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -395,7 +395,7 @@ export function apply(ctx, config = {}) {
   ctx.on('sdk-extensions/resolve', method => methods.get(method))
   // ── 8. per-conversation model (#53) ─────────────────────────────────────────
   setupSessionModel(ctx)
-  // ── 9. session migration import (设置 → 导入数据（文件夹）) ─────────────────────
+  // ── 9. session migration import (设置 → 导入数据（文件夹）选按会话分目录的全量导出) ──
   setupSessionImport(ctx, { home, cwd: process.env.HOME || home })
 
   // ── 1. Hardline floor ──────────────────────────────────────────────────────
@@ -472,7 +472,7 @@ export function apply(ctx, config = {}) {
       'remote-payload': '将下载网络内容并立即执行，可能运行未知代码。',
       'nested-notice': '命令包含多层嵌套，可能隐藏真实操作。',
     }
-    return `${v.summary}。${CONSEQ[v.rule] || ''}是否继续？`
+    return `【危险】${v.summary}。${CONSEQ[v.rule] || ''}是否继续？（只有你明确同意才会执行）`
   }
 
   ctx.on('tools/pre-execute', async (exec, next) => {
