@@ -153,7 +153,7 @@ class SessionStore @Inject constructor(
     private val recycled = MutableStateFlow(RecycleBin.entries(context).keys)
 
     val conversations: Flow<List<SessionEntity>> =
-        kotlinx.coroutines.flow.combine(dao.observeTopLevel(), recycled) { rows, rec ->
+        kotlinx.coroutines.flow.combine<List<SessionEntity>, Set<String>, List<SessionEntity>>(dao.observeTopLevel(), recycled) { rows, rec ->
             rows.filter { SessionVisibility.listed(it) && it.id !in rec }
         }
 
