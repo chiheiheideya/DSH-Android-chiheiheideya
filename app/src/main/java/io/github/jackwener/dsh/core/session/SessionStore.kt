@@ -577,7 +577,22 @@ class SessionStore @Inject constructor(
                 ?: dao.get(sessionId)?.title ?: text.take(40)
             DeferredRuns.post(context, sessionId, text, rule, label)
         } catch (e: EngineStartException) {
-            fail(sessionId, "engine", e.message ?: "", e.log, retryText)
+            // 引擎起不来是最常见的一类失败：给中文说明 + 可执行的下一步，而不是把英文堆给用户
+            val why = e.message ?: "未知原因"
+            val adv = when {
+                why.contains("No DeepSeek API key", true) || why.contains("not signed in", true) ->
+                    "还没有登录或配置 API Key。"
+                why.contains("session", true) && why.contains("exists", true) ->
+                    "这个会话的引擎日志读不出来（可能是旧版本导入的）。"
+                why.contains("working-directory", true) || why.contains("directory does not exist", true) ->
+                    "会话的工作目录不存在（多是从旧设备/旧版本迁移过来的路径）。"
+                why.contains("native", true) || why.contains("dlopen", true) ->
+                    "引擎的原生组件没加载起来（安装包可能不完整，建议重新安装）。"
+                else -> "引擎没能启动。"
+            }
+            fail(sessionId, "engine",
+                adv + "可以按顺序试：① 点下面的「重启引擎并重试」；② 去 设置 → 手机权限 检查权限；③ 仍然失败就把这段错误发给 AI，让它读日志排查。\n〔原始错误〕" + why,
+                e.log, retryText)
         } catch (e: JsonRpcException) {
             // 重复导入 / 旧日志不合法时引擎只会说 "already exists"：换成一句人话，别把英文技术错误甩给用户
             if (SessionOpen.alreadyExists(e.message)) {
