@@ -343,7 +343,8 @@ fun Composer(
             }
             // The context ring and model chip take only the space left, so Send always stays on screen.
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
-            if (showChips && contextTokens > 0) ContextRing(contextTokens, model.contextWindow, model.contextSource)
+            // 上下文占用要算上"输出预留"（引擎请求时预留 completion tokens），否则显示 79% 其实已经满了
+            if (showChips && contextTokens > 0) ContextRing(contextTokens, model.contextWindow, model.contextSource, reserve = model.limits?.maxTokens?.toLong() ?: 256_000L)
             if (showChips) Box(Modifier.weight(1f, fill = false)) {
                 // Third-party models: the levels the engine reports for them (#46); the chip names the level in effect.
                 val defaultLabel = stringResource(R.string.effort_default)
@@ -460,10 +461,11 @@ fun SendButton(running: Boolean, empty: Boolean, onSend: () -> Unit, onStop: () 
 
 /** dsh ContextMeter: 14 dp ring + percentage; tap for the occupancy panel. */
 @Composable
-fun ContextRing(tokens: Long, window: Long, source: io.github.jackwener.dsh.core.provider.LimitSource? = null) {
+fun ContextRing(tokens: Long, window: Long, source: io.github.jackwener.dsh.core.provider.LimitSource? = null, reserve: Long = 0L) {
     val c = Dsh.colors
     var open by remember { mutableStateOf(false) }
-    val frac = (tokens.toFloat() / window).coerceIn(0f, 1f)
+    // tokens = 上次请求的输入；reserve = 本次请求预留的输出 tokens（两者相加才是真实占用）
+    val frac = ((tokens + reserve).toFloat() / window).coerceIn(0f, 1f)
     val pct = (frac * 100).toInt().coerceAtLeast(if (tokens > 0) 1 else 0)
     Box {
         Row(Modifier.height(28.dp).clip(Radius.sm).pressable({ open = true }, Radius.sm).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -482,7 +484,7 @@ fun ContextRing(tokens: Long, window: Long, source: io.github.jackwener.dsh.core
                     Text(stringResource(R.string.context_used), style = DshType.xs13, color = c.labelSecondary)
                     Text(" $pct%", style = DshType.xs13.copy(fontWeight = FontWeight(600)), color = c.labelPrimary)
                     Spacer(Modifier.weight(1f))
-                    Text("~${Fmt.tokens(tokens)} / ${Fmt.tokens(window)}", style = DshType.xxs12, color = c.labelTertiary)
+                    Text("~${Fmt.tokens(tokens)} + 预留 ${Fmt.tokens(reserve)} / ${Fmt.tokens(window)}", style = DshType.xxs12, color = c.labelTertiary)
                 }
                 Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(c.borderL2)) {
                     Box(Modifier.fillMaxWidth(frac).height(4.dp).clip(CircleShape).background(c.kindMessages))
