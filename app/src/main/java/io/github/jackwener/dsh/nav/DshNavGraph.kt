@@ -46,7 +46,8 @@ import io.github.jackwener.dsh.feature.settings.shellAccessOf
  */
 fun NavGraphBuilder.dshGraph(nav: NavHostController, home: () -> HomeViewModel) {
     val open: (Route) -> Unit = { nav.navigate(it) }
-    composable<HomeRoute> { HomeScreen(home(), onSettings = { nav.openSettings(it) }, onAutomation = { nav.navigate(AutomationRoute) }) }
+    composable<HomeRoute> { HomeScreen(home(), onSettings = { nav.openSettings(it) }, onAutomation = { nav.navigate(AutomationRoute) }, onRecycleBin = { nav.navigate(RecycleBinRoute) }) }
+    composable<RecycleBinRoute> { e -> io.github.jackwener.dsh.feature.settings.RecycleBinScreen(onBack = { nav.up(e) }, vm = home()) }
     composable<OnboardingRoute> { e -> OnboardingPage(nav, e, keyStep = false) }
     composable<OnboardingKeyRoute> { e -> OnboardingPage(nav, e, keyStep = true) }
     composable<EnhanceRoute> { e -> EnhanceStep(onDone = { nav.up(e) }) }

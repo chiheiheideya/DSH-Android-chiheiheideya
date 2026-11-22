@@ -149,7 +149,13 @@ class SessionStore @Inject constructor(
     val status: StateFlow<Map<String, RowStatus>> = _status.asStateFlow()
 
     /** The session list (drawer, quick panel): [SessionVisibility.listed], the rule notifications share. */
-    val conversations: Flow<List<SessionEntity>> = dao.observeTopLevel().map { rows -> rows.filter(SessionVisibility::listed) }
+    /** 回收站里的会话 id（删除先放这里，可恢复；不删数据）。 */
+    private val recycled = MutableStateFlow(RecycleBin.entries(context).keys)
+
+    val conversations: Flow<List<SessionEntity>> =
+        kotlinx.coroutines.flow.combine(dao.observeTopLevel(), recycled) { rows, rec ->
+            rows.filter { SessionVisibility.listed(it) && it.id !in rec }
+        }
 
     init {
         // Rows still marked running belong to a previous app process (both processes died): the
@@ -1119,6 +1125,37 @@ class SessionStore @Inject constructor(
             }
             val label = settings.current().providers.firstOrNull { it.id == route.provider }?.name?.let { "$it / ${route.model}" } ?: route.model
             throw SessionModelRefused(label, e.message ?: "", e)
+        }
+    }
+
+    /** 收进回收站：只是隐藏（数据/日志都留着），可恢复或彻底删除。 */
+    fun moveToRecycleBin(sessionId: String) {
+        if (sessionId == io.github.jackwener.dsh.core.model.SessionModes.DSH_MODIFY_ID) return
+        RecycleBin.add(context, sessionId)
+        recycled.value = recycled.value + sessionId
+        deletedIds += sessionId
+        scope.launch { _deleted.emit(sessionId) }
+    }
+
+    /** 从回收站恢复。 */
+    fun restoreFromRecycleBin(sessionId: String) {
+        RecycleBin.remove(context, sessionId)
+        recycled.value = recycled.value - sessionId
+        deletedIds -= sessionId
+    }
+
+    /** 回收站里彻底删除（真删，不可恢复）。 */
+    suspend fun purgeFromRecycleBin(sessionId: String) {
+        RecycleBin.remove(context, sessionId)
+        recycled.value = recycled.value - sessionId
+        delete(sessionId)
+    }
+
+    /** 回收站列表（会话 + 删除时间，新的在前）。 */
+    suspend fun recycleItems(): List<Pair<SessionEntity, Long>> {
+        val rec = RecycleBin.entries(context)
+        return rec.entries.sortedByDescending { it.value }.mapNotNull { (id, t) ->
+            dao.get(id)?.let { it to t }
         }
     }
 

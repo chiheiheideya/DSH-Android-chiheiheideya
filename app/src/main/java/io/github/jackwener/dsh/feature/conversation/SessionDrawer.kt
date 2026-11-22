@@ -68,6 +68,8 @@ fun SessionDrawer(
     onAutomation: () -> Unit,
     /** Opens Settings, optionally at a section (SettingsSection name). */
     onSettings: (String?) -> Unit,
+    /** 打开回收站（删除的会话先放这里）。 */
+    onRecycleBin: () -> Unit,
     onClose: () -> Unit,
     onRename: (String, String) -> Unit,
     onPin: (String, Boolean) -> Unit,
@@ -108,6 +110,7 @@ fun SessionDrawer(
         }
         PanelEntry(R.drawable.dsw_clock_outline, stringResource(R.string.automation), onAutomation)
         PanelEntry(R.drawable.dsw_shield_outline, stringResource(R.string.drawer_permissions)) { onSettings("Phone") }
+        PanelEntry(R.drawable.dsw_trash_outline, "回收站") { onRecycleBin() }
         Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).padding(start = 8.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.sessions), Modifier.weight(1f), style = DshType.xs13m, color = c.labelTertiary)
             IconBtn(R.drawable.dsw_search_outline, { searching = !searching; if (!searching) query = "" }, size = 40.dp, iconSize = 14.dp, tint = c.labelTertiary,

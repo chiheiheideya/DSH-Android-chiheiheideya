@@ -242,10 +242,17 @@ class HomeViewModel @Inject constructor(
         store.setArchived(id, archived)
         if (archived && id == this@HomeViewModel.id) newSession()
     }
-    fun delete(id: String) = viewModelScope.launch {
-        store.delete(id)
+    /** 删除 = 收进回收站（可恢复）。 */
+    fun delete(id: String) {
+        store.moveToRecycleBin(id)
         if (id == this@HomeViewModel.id) newSession()
     }
+
+    fun restoreFromRecycleBin(id: String) = store.restoreFromRecycleBin(id)
+
+    fun purgeFromRecycleBin(id: String) = viewModelScope.launch { store.purgeFromRecycleBin(id) }
+
+    suspend fun recycleItems() = store.recycleItems()
 }
 
 @HiltViewModel

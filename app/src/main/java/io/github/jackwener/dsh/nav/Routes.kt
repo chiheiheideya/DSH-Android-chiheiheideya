@@ -21,6 +21,9 @@ sealed interface Route
 
 @Serializable data object HomeRoute : Route
 
+/** 回收站：删除的会话先放这里，可恢复或彻底删除。 */
+@Serializable data object RecycleBinRoute : Route
+
 /** First run without a credential (pushed over home, which it replaces as the root). */
 @Serializable data object OnboardingRoute : Route
 /** Onboarding's 使用 API Key step (the key card expanded). */
