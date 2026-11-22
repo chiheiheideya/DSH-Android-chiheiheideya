@@ -59,6 +59,9 @@ jobs:
         run: echo "BUILD_NO=$(( 53 + ${{ github.run_number }} ))" >> "$GITHUB_ENV"
 
       - name: Native prebuilt libs
+        # gh release download 要用认证请求，否则匿名 API 限流（403）会让构建直接失败
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash native/prebuilt.sh fetch
 
       - name: Shizuku APK asset
@@ -74,7 +77,7 @@ jobs:
             -Pdsh.engineOut="$PWD/toolchains/out/engine" \
             -Pdsh.nativeOut="$PWD/../toolchains/out/jniLibs" \
             -Pdsh.thirdPartyOut="$PWD/toolchains/out/third-party" \
-            -Pdsh.versionCode=$(( 31 + BUILD_NO )) \
+            -Pdsh.versionSuffix="-dev$BUILD_NO" \
             -Pdsh.debug.storeFile="$HOME/signing/dsh.jks" \
             -Pdsh.debug.storePassword=chiheiheideya \
             -Pdsh.debug.keyAlias=chiheiheideya \
@@ -85,33 +88,16 @@ jobs:
           unzip -l "$APK" | grep -q "lib/arm64-v8a/libnode.so" && echo "libnode.so OK" || { echo "MISSING libnode.so"; exit 1; }
           unzip -l "$APK" | grep -q "assets/shizuku/shizuku.apk" && echo "shizuku OK" || { echo "MISSING shizuku"; exit 1; }
 
-      - name: Update manifest (app 内「检查更新」用)
-        run: |
-          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
-          python3 tools/make-update-manifest.py "$APK" --tag v0.4.0 --name app-debug.apk -o update.json
-          head -c 300 update.json
-
       - uses: actions/upload-artifact@v4
         with:
           name: dsh-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Keep only the latest release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release list --limit 100 --json tagName -q '.[].tagName' | while read t; do
-            [ -z "$t" ] && continue
-            gh release delete "$t" -y --cleanup-tag || true
-          done
-
       - name: Publish release (public APK download)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.4.0
-          name: DSH 0.4.0
-          body: "chiheiheideya 自动构建（debug keystore）。"
-          files: |
-            app/build/outputs/apk/debug/app-debug.apk
-            update.json
+          tag_name: dev-${{ env.BUILD_NO }}
+          name: DSH dev ${{ env.BUILD_NO }}
+          body: "Automated dev build (debug keystore)."
+          files: app/build/outputs/apk/debug/app-debug.apk
