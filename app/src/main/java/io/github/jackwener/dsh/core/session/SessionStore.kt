@@ -152,9 +152,14 @@ class SessionStore @Inject constructor(
     /** 回收站里的会话 id（删除先放这里，可恢复；不删数据）。 */
     private val recycled = MutableStateFlow(RecycleBin.entries(context).keys)
 
+    private fun <T> kotlinx.coroutines.flow.Flow<T>.kotlinxFlatMapLatest(transform: suspend (T) -> kotlinx.coroutines.flow.Flow<List<SessionEntity>>): kotlinx.coroutines.flow.Flow<List<SessionEntity>> =
+        kotlinx.coroutines.flow.flatMapLatest(this, transform)
+
     val conversations: Flow<List<SessionEntity>> =
-        kotlinx.coroutines.flow.combine<List<SessionEntity>, Set<String>, List<SessionEntity>>(dao.observeTopLevel(), recycled) { rows, rec ->
-            rows.filter { SessionVisibility.listed(it) && it.id !in rec }
+        recycled.kotlinxFlatMapLatest { rec: Set<String> ->
+            dao.observeTopLevel().map { rows: List<SessionEntity> ->
+                rows.filter { SessionVisibility.listed(it) && it.id !in rec }
+            }
         }
 
     init {
