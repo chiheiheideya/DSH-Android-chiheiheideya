@@ -27,8 +27,8 @@ android {
         targetSdk = 36
         versionCode = (project.findProperty("dsh.versionCode")?.toString()?.toIntOrNull() ?: 31)
         // 版本后缀：默认 chiheiheideya 标识（CI 传 -Pdsh.versionSuffix="-dev$BUILD_NO" 时可覆盖）
-        // 版本号跟随官方 DSH（0.4.0）；更新靠 versionCode 递增
-        versionName = "0.4.0"
+        // 版本号与官方一致（0.4.0 起，每次发布 +0.1）；CI 用 -Pdsh.versionName 传下一个号
+        versionName = (project.findProperty("dsh.versionName")?.toString() ?: "0.4.0")
         ndk { abiFilters += "arm64-v8a" }
         // Bundled official Shizuku APK (in-app install/update); pinned in tools/fetch-shizuku.sh.
         // 让 App 与引擎知道这是谁的构建（关于页 / 系统提示词用同一串）
