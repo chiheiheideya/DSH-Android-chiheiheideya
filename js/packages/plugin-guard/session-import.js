@@ -212,7 +212,7 @@ function chatText(rows) {
     const parts = []
     for (const [k, v] of Object.entries(a)) {
       if (v == null || typeof v === 'object') continue
-      parts.push(k + '=' + cut(String(v), 120))
+      parts.push(k + '=' + cut(String(v), 500))
       if (parts.length >= 4) break
     }
     return parts.join(', ')
@@ -223,10 +223,10 @@ function chatText(rows) {
     try { d = JSON.parse(r.json) } catch { continue }
     if (r.type === 'user/message') {
       const t = pick(d.content)
-      if (t) out.push({ role: 'user', text: t })
+      if (t) out.push({ role: 'user', text: cut(t, 4000) })
     } else if (r.type === 'assistant/message') {
       const t = pick(d.message?.content)
-      if (t) out.push({ role: 'assistant', text: t })
+      if (t) out.push({ role: 'assistant', text: cut(t, 4000) })
     } else if (r.type === 'tool/call') {
       // 工具调用：压缩成一行文本，保留"做了什么"，让模型知道当时查过什么
       const name = d.name || d.tool || d.toolName || '?'
@@ -235,7 +235,7 @@ function chatText(rows) {
     } else if (r.type === 'tool/result') {
       // 工具结果：只留前 400 字，避免日志爆炸
       const content = pick(d.content) || (typeof d.result === 'string' ? d.result : '') || (typeof d.output === 'string' ? d.output : '')
-      const t = cut(content, 400)
+      const t = cut(content, 8000)
       if (t) out.push({ role: 'assistant', text: '〔结果〕' + t })
     }
   }

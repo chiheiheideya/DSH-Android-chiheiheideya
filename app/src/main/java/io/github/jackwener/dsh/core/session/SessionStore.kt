@@ -244,12 +244,17 @@ class SessionStore @Inject constructor(
 
     /** 引擎返回的元数据 + import-rows/<id>.jsonl 的事件行 → 会话库（逐行读、分批 500 条）。 */
     private suspend fun writeImportedSession(result: JsonObject?) {
-        val sessions = result?.get("sessions") as? JsonArray ?: return
-        for (element in sessions) {
-            val o = element as? JsonObject ?: continue
-            val id = o["id"]?.jsonPrimitive?.contentOrNull ?: continue
-            val title = o["title"]?.jsonPrimitive?.contentOrNull ?: id
-            val createdAt = o["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis()
+        // 引擎返回可能缺失（请求超时/异常）：JS 一定把每行事件写进 import-rows/<id>.jsonl，
+        // 所以以 import-rows 目录为**权威来源**兜底，避免"导入成功但会话不出现"。
+        val rowsDir = File(context.filesDir, "dsh-home/android/import-rows")
+        val fromEngine = result?.get("sessions") as? JsonArray
+        val entries: List<Triple<String, String, Long>> = fromEngine?.mapNotNull { element ->
+            val o = element as? JsonObject ?: return@mapNotNull null
+            val id = o["id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            Triple(id, o["title"]?.jsonPrimitive?.contentOrNull ?: id, o["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis())
+        } ?: rowsDir.listFiles().orEmpty().map { Triple(it.nameWithoutExtension, it.nameWithoutExtension, System.currentTimeMillis()) }
+        for ((id, title0, createdAt) in entries) {
+            val title = title0.ifBlank { id }
             val rowsFile = File(context.filesDir, "dsh-home/android/import-rows/$id.jsonl")
             var lastTime = 0L
             val chat = StringBuilder()
