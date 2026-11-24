@@ -93,6 +93,23 @@ fun DshMarkdown(text: String, modifier: Modifier = Modifier, compact: Boolean = 
         padding = markdownPadding(block = if (compact) 2.dp else 6.dp, codeBlock = androidx.compose.foundation.layout.PaddingValues(14.dp, 10.dp)),
         modifier = modifier,
     )
+    // 含表格的回复：表格可能横向显示不全，给一个「…查看全文」入口
+    val hasTable = remember(text) {
+        text.lineSequence().any { line -> val t = line.trim(); t.startsWith("|") && t.count { it == '|' } >= 2 }
+    }
+    var fullOpen by remember { mutableStateOf(false) }
+    if (hasTable) {
+        Text("…查看全文", Modifier.clickable { fullOpen = true }.padding(top = 4.dp), style = DshType.xs13, color = c.link)
+    }
+    if (fullOpen) {
+        DDialog({ fullOpen = false }, "完整内容", buttons = {
+            DButton("关闭", { fullOpen = false }, variant = BtnVariant.Outline)
+        }) {
+            SelectionContainer {
+                Text(text, Modifier.verticalScroll(rememberScrollState()), style = DshType.xs13, color = c.labelSecondary)
+            }
+        }
+    }
 }
 
 /** dsh CodeBlock / TerminalBlock: R16 card on the code-block fill with a banner and copy button. */
