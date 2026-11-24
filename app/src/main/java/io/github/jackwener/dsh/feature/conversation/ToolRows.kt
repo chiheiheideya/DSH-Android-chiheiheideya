@@ -74,7 +74,7 @@ fun prettyJson(raw: String?): String = raw?.let {
 @Composable
 fun ReasoningRow(b: Block.Reasoning, live: Boolean) {
     // 用户手动展开过就保持展开（思考完成/下一步刷新时不自动折叠）
-    var open by rememberSaveable(b.key + ':open') { mutableStateOf(false) }
+    var open by rememberSaveable(b.key + ":open") { mutableStateOf(false) }
     var fullText by remember { mutableStateOf<String?>(null) }
     val preview = remember(b.text) { b.text.lineSequence().map { it.trim().trimStart('#', '*', '-', ' ') }.firstOrNull { it.isNotBlank() } ?: "" }
     Column {
