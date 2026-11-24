@@ -590,6 +590,7 @@ private fun AboutSection(vm: SettingsViewModel) {
         }
         val s by vm.settings.collectAsStateWithLifecycle()
         io.github.jackwener.dsh.feature.update.UpdateSettingsRows(vm.updater, s.autoUpdateCheck, { vm.setAutoUpdateCheck(it) })
+        io.github.jackwener.dsh.feature.update.OfficialUpdateRow()
         SettingsRow(stringResource(R.string.engine), when (val e = engine) {
             EngineState.Ready -> stringResource(R.string.engine_ready); EngineState.Starting -> stringResource(R.string.starting_engine)
             EngineState.Stopped -> stringResource(R.string.engine_idle); is EngineState.Failed -> e.message.take(300)

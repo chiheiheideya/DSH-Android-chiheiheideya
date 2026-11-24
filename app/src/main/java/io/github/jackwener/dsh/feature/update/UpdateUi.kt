@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import io.github.jackwener.dsh.BuildConfig
 import io.github.jackwener.dsh.R
 import io.github.jackwener.dsh.core.designsystem.BtnSize
@@ -199,4 +200,59 @@ fun UpdateSettingsRows(updater: AppUpdater, autoCheck: Boolean, onAutoCheck: (Bo
         }
     })
     SettingsRow(stringResource(R.string.upd_auto), stringResource(R.string.upd_auto_desc), trailing = { DSwitch(autoCheck, onAutoCheck) })
+}
+
+/** 官方版检查（jackwener/DSH-Android）：只提示，不自动下载，用户手动去官方仓库更新。 */
+@Composable
+fun OfficialUpdateRow() {
+    val context = LocalContext.current
+    var state by remember { mutableStateOf<String?>(null) }
+    var latest by remember { mutableStateOf<String?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val current = BuildConfig.VERSION_NAME
+    SettingsRow("官方版（jackwener 原版）", state ?: "未检查", divider = true,
+        trailing = {
+            DButton(if (latest != null && latest != current) "去更新" else "检查", {
+                val target = latest
+                if (target != null && target != current) {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/jackwener/DSH-Android/releases/latest")))
+                    }
+                } else {
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        val v = runCatching { fetchOfficialVersion() }.getOrNull()
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            if (v.isNullOrBlank()) {
+                                state = "获取失败（网络或仓库不可达）"
+                            } else {
+                                latest = v
+                                state = if (v != current) "官方版有更新 - " + v else "与官方一致（" + v + "）"
+                            }
+                        }
+                    }
+                }
+            }, variant = BtnVariant.Outline, size = BtnSize.Sm)
+        })
+}
+
+/** 官方仓库 update/latest.json 的 versionName（jsDelivr 优先，raw 兜底）。 */
+private fun fetchOfficialVersion(): String? {
+    val urls = listOf(
+        "https://cdn.jsdelivr.net/gh/jackwener/DSH-Android@main/update/latest.json",
+        "https://raw.githubusercontent.com/jackwener/DSH-Android/main/update/latest.json",
+    )
+    for (u in urls) {
+        val v = runCatching {
+            val conn = java.net.URL(u).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            if (conn.responseCode != 200) null
+            else {
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                Regex("\"versionName\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+            }
+        }.getOrNull()
+        if (!v.isNullOrBlank()) return v
+    }
+    return null
 }
