@@ -269,5 +269,5 @@ fun MyVersionRow(updater: AppUpdater) {
         CheckResult.UpToDate -> " · 无新的版本更新"
         else -> ""
     }
-    SettingsRow("更新版", if (checking) "检查中…" else current + upd, divider = true)
+    SettingsRow("当前版本", if (checking) "检查中…" else current + upd, divider = true)
 }
