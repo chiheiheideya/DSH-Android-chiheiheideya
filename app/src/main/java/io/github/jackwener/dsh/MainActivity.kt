@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestMaxRefreshRate()
+        // 窗口 attach 后再应用一次：onCreate 时窗口还没 attach，preferredRefreshRate 常被系统忽略
+        window.decorView.post { requestMaxRefreshRate() }
         // Only for a fresh launch: after recreation (rotation, theme) the user may have moved on.
         if (savedInstanceState == null) {
             pendingSession = sessionOf(intent)
@@ -192,6 +194,12 @@ class MainActivity : ComponentActivity() {
      * OEM keeps a global cap (vivo: `vivo_screen_refresh_rate_mode=120`) the Shizuku shell lifts that
      * cap too. Silently does nothing when Shizuku is not available.
      */
+    /** 每次切回前台都重新锁一次最高刷新率（系统可能在切后台时改回 60）。 */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) requestMaxRefreshRate()
+    }
+
     private fun requestMaxRefreshRate() {
         var peakRate = 0f
         runCatching {
