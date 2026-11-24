@@ -198,6 +198,8 @@ class SessionStore @Inject constructor(
         if (sessions.isEmpty()) return@withContext
         val errorFile = File(context.filesDir, "dsh-home/android/import-error.txt")
         try {
+            // 导入前先停引擎：旧会话日志/锁可能被引擎进程持有，直接写会报「会话已存在」
+            runCatching { engine.stop() }
             // control() 是给登录/配置用的通道：**没登录也能把引擎拉起来**（sdk() 会抛 NoCredentialsException，
             // 而导入是本地操作，不该依赖登录 —— 之前"导入失败"就是这个原因）。
             val sdk = engine.control()
