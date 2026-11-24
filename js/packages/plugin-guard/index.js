@@ -481,7 +481,9 @@ export function apply(ctx, config = {}) {
       const root0 = rootSessionId(ctx, exec.agent)
       const unattended0 = isUnattended(root0)
       const preset0 = unattended0 ? undefined : presets.get(root0)
-      const fullWaived = v.fullAllowed === true && preset0 === PRESETS.full
+      // 危险破坏类（格式化/抹除/删存储根系统目录）：**完全权限也要询问**（用户明确要求）
+      const DESTRUCTIVE = new Set(['rm-protected-root', 'rm-system-dir', 'find-delete-protected', 'disk-tool', 'mkfs-block-device', 'dd-block-device', 'write-block-device', 'wipe'])
+      const fullWaived = v.fullAllowed === true && preset0 === PRESETS.full && !DESTRUCTIVE.has(v.rule)
       const nestedDeep = v.rule === 'nested-notice' && (v.depth ?? 1) >= 3
       const mustAsk = !fullWaived && (v.rule !== 'nested-notice' || nestedDeep)
       if (mustAsk) {

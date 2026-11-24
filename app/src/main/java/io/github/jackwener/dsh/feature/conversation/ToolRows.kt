@@ -73,7 +73,8 @@ fun prettyJson(raw: String?): String = raw?.let {
 /** Thinking row (dsh ReasoningRow): collapsed to 思考 · first-line preview; expanded body is compact markdown indented 22. */
 @Composable
 fun ReasoningRow(b: Block.Reasoning, live: Boolean) {
-    var open by rememberSaveable(b.key) { mutableStateOf(false) }
+    // 用户手动展开过就保持展开（思考完成/下一步刷新时不自动折叠）
+    var open by rememberSaveable(b.key + ':open') { mutableStateOf(false) }
     var fullText by remember { mutableStateOf<String?>(null) }
     val preview = remember(b.text) { b.text.lineSequence().map { it.trim().trimStart('#', '*', '-', ' ') }.firstOrNull { it.isNotBlank() } ?: "" }
     Column {
