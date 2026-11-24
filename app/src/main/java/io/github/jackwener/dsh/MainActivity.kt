@@ -83,8 +83,9 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var extensions: io.github.jackwener.dsh.core.extensions.ExtensionsRepository
     @Inject lateinit var updater: io.github.jackwener.dsh.core.update.AppUpdater
     @Inject lateinit var sessions: io.github.jackwener.dsh.core.session.SessionStore
-    @Inject lateinit var shell: io.github.jackwener.dsh.core.platform.ShizukuShell
     private var pendingSession by mutableStateOf<String?>(null)
+    /** EXTRA_NEW_SESSION (the 新会话 app shortcut): home on a new conversation. */
+    private var pendingNew by mutableStateOf(false)
     /** Settings section to open (EXTRA_SECTION, e.g. the quick panel's 登录 / 添加 API Key / 打开自检). */
     private var pendingSection by mutableStateOf<String?>(null)
     private var navReady by mutableStateOf(false)
@@ -100,6 +101,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             pendingSession = sessionOf(intent)
             pendingSection = intent.getStringExtra(EXTRA_SECTION)
+            pendingNew = intent.getBooleanExtra(EXTRA_NEW_SESSION, false)
         }
         handleAppLink(intent)
         if (savedInstanceState == null) handleExtensionShare(intent)
@@ -130,22 +132,7 @@ class MainActivity : ComponentActivity() {
                         boot?.let { AppNav(it.second, platformPage) }
                         AccountToastHost(account)
                         // The update prompt (AppUpdater), over whatever page is showing.
-                        io.github.jackwener.dsh.feature.update.UpdateHost(updater, onUpdate = {
-                            lifecycleScope.launch {
-                                sessions.ensureDshModify()
-                                sessions.prompt(
-                                    io.github.jackwener.dsh.core.model.SessionModes.DSH_MODIFY_ID,
-                                    "检查到有新的更新版本。请在不改变当前所有功能的前提下，把 DSH 更新到最新版本：" +
-                                        "先更新版本号（versionName/版本信息），再走我们的构建仓库构建并发布新 APK，完成后把下载目录或 Release 链接给我。" +
-                                        "遇到不容易判断的地方（要不要删/改某个功能、改哪个仓库、签名怎么办）先问我，不要擅自删功能或改需求。",
-                                )
-                            }
-                            startActivity(
-                                Intent(this@MainActivity, MainActivity::class.java)
-                                    .putExtra(EXTRA_SESSION, io.github.jackwener.dsh.core.model.SessionModes.DSH_MODIFY_ID)
-                                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                            )
-                        })
+                        io.github.jackwener.dsh.feature.update.UpdateHost(updater)
                     }
                 }
             }
@@ -157,6 +144,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         pendingSession = sessionOf(intent)
         pendingSection = intent.getStringExtra(EXTRA_SECTION)
+        pendingNew = intent.getBooleanExtra(EXTRA_NEW_SESSION, false)
         handleAppLink(intent)
         handleExtensionShare(intent)
     }
@@ -186,6 +174,9 @@ class MainActivity : ComponentActivity() {
      * opened in a browser (用浏览器登录's Custom Tab, or the copied sign-in link); the in-app
      * screen intercepts it itself.
      */
+    private fun handleAppLink(intent: Intent?) {
+        if (SignInRouting.isCallback(intent?.data)) account.onSignInReturned()
+    }
 
     /**
      * The page tree (nav.DshNavGraph), home as the fixed start. Settings links from outside the tree
@@ -206,6 +197,9 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(pendingSession) {
             // Never a plugin's background session (#43; e.g. an old notification of one): home stays as it is.
             pendingSession?.let { id -> if (!sessions.isForeign(id)) home.open(id); nav.toHome(); pendingSession = null }
+        }
+        LaunchedEffect(pendingNew) {
+            if (pendingNew) { home.newSession(null); nav.toHome(); pendingNew = false }
         }
         LaunchedEffect(pendingSection) {
             // Ignored during onboarding (home is not on the stack yet), as before.
@@ -247,5 +241,7 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_SECTION = "settings_section"
         /** The ongoing notifications' tap (Notifications.openRunning): the conversation running at tap time. */
         const val EXTRA_OPEN_RUNNING = "open_running"
+        /** Open home on a new conversation (the 新会话 app shortcut). */
+        const val EXTRA_NEW_SESSION = "new_session"
     }
 }
