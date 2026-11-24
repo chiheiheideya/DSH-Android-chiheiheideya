@@ -131,7 +131,14 @@ fun SessionDrawer(
                             }
                             if (hit.sessionId in expandedHits) {
                                 hit.snippets.forEach { snip ->
-                                    Text(snip, Modifier.padding(start = 20.dp, end = 8.dp, top = 2.dp, bottom = 2.dp), style = DshType.xs13, color = c.labelSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                    // 用户消息靠左、模型输出靠右（搜索结果里一眼分清）
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (snip.fromModel) Arrangement.End else Arrangement.Start) {
+                                        Text(snip.text, Modifier.weight(1f, fill = false).clip(Radius.md).background(if (snip.fromModel) c.bgLayer1 else c.hoverSolid)
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            style = DshType.xs13, color = c.labelSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                            textAlign = if (snip.fromModel) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start)
+                                    }
+                                    Spacer(Modifier.height(2.dp))
                                 }
                             }
                         }

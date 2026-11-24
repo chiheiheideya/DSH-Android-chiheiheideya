@@ -905,14 +905,20 @@ class SessionStore @Inject constructor(
 
 
     /** One search hit: a conversation with the message snippets that contain the query. */
-    data class SessionSearchHit(val sessionId: String, val title: String, val snippets: List<String>)
+    data class SessionSearchHit(val sessionId: String, val title: String, val snippets: List<SearchSnippet>) {
+        /** 一条命中：来自用户（左侧）还是模型（右侧）。 */
+        class SearchSnippet(val text: String, val fromModel: Boolean)
+    }
+
+    /** 搜索结果的一条命中：来自用户还是模型（用于左右分列显示）。 */
+    class SearchSnippet(val text: String, val fromModel: Boolean)
 
     /** Searches message text of every conversation (titles and snippets), newest first. */
     suspend fun searchSessions(q: String, limit: Int = 200): List<SessionSearchHit> = withContext(Dispatchers.IO) {
         if (q.isBlank()) return@withContext emptyList()
         dao.searchEvents(q, limit).filter { it.sessionId != io.github.jackwener.dsh.core.model.SessionModes.DSH_MODIFY_ID }.groupBy { it.sessionId }.map { (sid, evs) ->
             val title = dao.get(sid)?.title?.takeIf { it.isNotBlank() } ?: sid
-            SessionSearchHit(sid, title, evs.take(5).map { snippetOf(it.json, q) })
+            SessionSearchHit(sid, title, evs.take(6).map { SessionSearchHit.SearchSnippet(snippetOf(it.json, q), fromModel = it.type == "assistant/message" || it.type.startsWith("tool/")) })
         }
     }
 
