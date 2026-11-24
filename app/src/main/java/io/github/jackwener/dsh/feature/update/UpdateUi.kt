@@ -226,7 +226,7 @@ fun OfficialUpdateRow() {
                                 state = "获取失败（网络或仓库不可达）"
                             } else {
                                 latest = v
-                                state = if (v != current) "官方版有更新 - " + v else "与官方一致（" + v + "）"
+                                state = if (v != current) "官方版 " + v + " 有更新！" else "官方版 " + v + " 已是最新！"
                             }
                         }
                     }
