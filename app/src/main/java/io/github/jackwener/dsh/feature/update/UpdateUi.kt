@@ -226,7 +226,7 @@ fun OfficialUpdateRow() {
                                 state = "获取失败（网络或仓库不可达）"
                             } else {
                                 latest = v
-                                state = if (v != current) "官方版 " + v + " 有更新！" else "官方版 " + v + " 已是最新！"
+                                state = "官方版 " + v + (if (v != current) " · 有新的版本更新" else " · 无新的版本更新")
                             }
                         }
                     }
@@ -255,4 +255,19 @@ private fun fetchOfficialVersion(): String? {
         if (!v.isNullOrBlank()) return v
     }
     return null
+}
+
+
+/** 我的版本（本仓库构建）：与官方版同样的显示格式，始终在官方版上面。 */
+@Composable
+fun MyVersionRow(updater: AppUpdater) {
+    val last by updater.lastCheck.collectAsStateWithLifecycle()
+    val checking by updater.checking.collectAsStateWithLifecycle()
+    val current = BuildConfig.VERSION_NAME + " · build " + BuildConfig.VERSION_CODE
+    val upd = when (val r = last?.result) {
+        is CheckResult.Found -> " · 有新的版本更新（" + r.versionName + "）"
+        CheckResult.UpToDate -> " · 无新的版本更新"
+        else -> ""
+    }
+    SettingsRow("我的版本", if (checking) "检查中…" else current + upd, divider = true)
 }

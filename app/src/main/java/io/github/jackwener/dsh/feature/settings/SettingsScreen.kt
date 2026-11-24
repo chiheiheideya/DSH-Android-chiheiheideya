@@ -589,7 +589,7 @@ private fun AboutSection(vm: SettingsViewModel) {
             Text(msg, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp), style = DshType.xxs12, color = c.labelTertiary)
         }
         val s by vm.settings.collectAsStateWithLifecycle()
-        io.github.jackwener.dsh.core.designsystem.SettingsRow("当前版本", BuildConfig.VERSION_NAME + " · build " + BuildConfig.VERSION_CODE, divider = true)
+        io.github.jackwener.dsh.feature.update.MyVersionRow(vm.updater)
         io.github.jackwener.dsh.feature.update.UpdateSettingsRows(vm.updater, s.autoUpdateCheck, { vm.setAutoUpdateCheck(it) })
         io.github.jackwener.dsh.feature.update.OfficialUpdateRow()
         SettingsRow(stringResource(R.string.engine), when (val e = engine) {
