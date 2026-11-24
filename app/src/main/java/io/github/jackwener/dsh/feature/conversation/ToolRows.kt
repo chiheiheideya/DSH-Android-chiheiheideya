@@ -1,5 +1,29 @@
 package io.github.jackwener.dsh.feature.conversation
 
+/** 工具执行失败时把常见英文错误码翻成中文说明（原文保留，便于排查）。 */
+internal fun zhToolError(e: String): String {
+    if (e.isBlank()) return "工具执行失败"
+    val map = listOf(
+        "ENOENT" to "文件或目录不存在",
+        "EACCES" to "没有访问权限",
+        "EPERM" to "权限被拒绝",
+        "ENOSPC" to "存储空间不足",
+        "ETIMEDOUT" to "操作超时",
+        "ECONNREFUSED" to "连接被拒绝",
+        "EINVAL" to "参数无效",
+        "No such file" to "文件不存在",
+        "Permission denied" to "权限不足",
+        "timeout" to "超时",
+        "JSON" to "返回内容不是合法 JSON",
+        "not found" to "找不到目标",
+        "unknown tool" to "没有这个工具",
+    )
+    val hit = map.firstOrNull { e.contains(it.first, ignoreCase = true) }
+    val why = hit?.second ?: "执行出错"
+    return "工具执行失败：" + why + "。原始报错：" + e.take(200)
+}
+
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -104,7 +128,7 @@ fun ToolRow(t: Block.Tool, sessionId: String, onInspect: (String) -> Unit) {
     var fullText by remember { mutableStateOf<String?>(null) }
     val live = t.state == ToolState.Running
     val summary = when (t.state) {
-        ToolState.Error -> t.error ?: ToolPresentation.summary(context, t)
+        ToolState.Error -> zhToolError(t.error ?: ToolPresentation.summary(context, t))
         ToolState.Rejected -> stringResource(R.string.tool_rejected)
         ToolState.Stopped -> stringResource(R.string.tool_stopped)
         else -> ToolPresentation.summary(context, t)
@@ -174,7 +198,7 @@ private fun ToolBody(t: Block.Tool, kind: BodyKind) {
         BodyKind.Question -> InOutCard(listOf(stringResource(R.string.col_in_short) to prettyJson(t.arguments), stringResource(R.string.col_out_short) to out))
         BodyKind.InOut -> InOutCard(listOf(stringResource(R.string.col_in_short) to prettyJson(t.arguments), stringResource(R.string.col_out_short) to out))
     }
-    if (t.state == ToolState.Error && kind != BodyKind.InOut && out.isBlank()) Text(t.error ?: "", style = DshType.xs13, color = c.error)
+    if (t.state == ToolState.Error && kind != BodyKind.InOut && out.isBlank()) Text(zhToolError(t.error ?: ""), style = DshType.xs13, color = c.error)
 }
 
 private fun numbered(text: String, window: Int): String {
