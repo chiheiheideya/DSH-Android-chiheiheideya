@@ -294,12 +294,6 @@ class SessionStore @Inject constructor(
             dao.upsert(SessionEntity(
                 id = id, title = title, createdAt = createdAt,
                 updatedAt = if (lastTime > 0) lastTime else System.currentTimeMillis(),
-                pinned = o["pinned"]?.jsonPrimitive?.longOrNull == 1L,
-                preset = o["preset"]?.jsonPrimitive?.contentOrNull,
-                modeId = o["modeId"]?.jsonPrimitive?.contentOrNull,
-                modelProvider = o["modelProvider"]?.jsonPrimitive?.contentOrNull,
-                modelId = o["modelId"]?.jsonPrimitive?.contentOrNull,
-                modelEffort = o["modelEffort"]?.jsonPrimitive?.contentOrNull,
             ))
         }
     }
