@@ -96,9 +96,6 @@ class MainActivity : ComponentActivity() {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        requestMaxRefreshRate()
-        // 窗口 attach 后再应用一次：onCreate 时窗口还没 attach，preferredRefreshRate 常被系统忽略
-        window.decorView.post { requestMaxRefreshRate() }
         // Only for a fresh launch: after recreation (rotation, theme) the user may have moved on.
         if (savedInstanceState == null) {
             pendingSession = sessionOf(intent)
@@ -189,50 +186,6 @@ class MainActivity : ComponentActivity() {
      * opened in a browser (用浏览器登录's Custom Tab, or the copied sign-in link); the in-app
      * screen intercepts it itself.
      */
-    /**
-     * Highest refresh rate, no prompt: the window asks for the display's fastest mode, and where the
-     * OEM keeps a global cap (vivo: `vivo_screen_refresh_rate_mode=120`) the Shizuku shell lifts that
-     * cap too. Silently does nothing when Shizuku is not available.
-     */
-    /** 每次切回前台都重新锁一次最高刷新率（系统可能在切后台时改回 60）。 */
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) requestMaxRefreshRate()
-    }
-
-    private fun requestMaxRefreshRate() {
-        var peakRate = 0f
-        runCatching {
-            val display = windowManager.defaultDisplay
-            val best = display.supportedModes.maxByOrNull { it.refreshRate } ?: return@runCatching
-            peakRate = best.refreshRate
-            // 锁定最高刷新率：优先显示模式 + 期望帧率；Android 11+ 再用固定帧率通告，避免系统降频分配
-            window.attributes = window.attributes.apply {
-                preferredDisplayModeId = best.modeId
-                preferredRefreshRate = best.refreshRate
-            }
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                runCatching { window.setFrameRate(best.refreshRate, android.view.Window.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE) }
-            }
-        }
-        lifecycleScope.launch {
-            runCatching {
-                val peak = if (peakRate > 0f) peakRate else 120f
-                val peakText = if (peak >= peak.toInt()) peak.toInt().toString() else peak.toString()
-                val cur = shell.exec("settings get system peak_refresh_rate", 6_000).output.trim()
-                if (cur != peakText) shell.exec("settings put system peak_refresh_rate " + peakText, 8_000)
-                val dv = shell.exec("settings get system min_refresh_rate", 6_000).output.trim()
-                if (cur != "null" && dv != peakText) shell.exec("settings put system min_refresh_rate " + peakText, 8_000)
-                // OEM-level cap (vivo)：只在这台设备真有这个键时改
-                val mode = shell.exec("settings get global vivo_screen_refresh_rate_mode", 6_000).output.trim()
-                if (mode != "null" && mode != peakText) shell.exec("settings put global vivo_screen_refresh_rate_mode " + peakText, 8_000)
-            }
-        }
-    }
-
-    private fun handleAppLink(intent: Intent?) {
-        if (SignInRouting.isCallback(intent?.data)) account.onSignInReturned()
-    }
 
     /**
      * The page tree (nav.DshNavGraph), home as the fixed start. Settings links from outside the tree
