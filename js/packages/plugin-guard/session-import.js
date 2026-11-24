@@ -326,7 +326,7 @@ export function importSessions({ dir, home, cwd, writeLog = false, dryRun = fals
     const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'))
     const raw = fs.readFileSync(eventsFile, 'utf8').split('\n').filter(l => l.trim()).map(l => JSON.parse(l))
     const id = meta.id
-    const title = name // 按会话名导入
+    const title = (typeof meta.title === 'string' && meta.title.trim() !== '') ? meta.title : name // 优先保留原会话名
     const repaired = repairEvents(raw, { cwd, id, createdAt: meta.createdAt ?? Date.now() })
     const referenced = new Set()
     for (const line of repaired.lines) for (const match of JSON.stringify(line).matchAll(/"attachmentId":"sha256:([0-9a-f]{64})"/g)) referenced.add(match[1])
