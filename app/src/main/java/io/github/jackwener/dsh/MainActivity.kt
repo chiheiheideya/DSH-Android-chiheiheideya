@@ -193,30 +193,33 @@ class MainActivity : ComponentActivity() {
      * cap too. Silently does nothing when Shizuku is not available.
      */
     private fun requestMaxRefreshRate() {
+        var peakRate = 0f
         runCatching {
             val display = windowManager.defaultDisplay
-            val best = display.supportedModes.maxByOrNull { it.refreshRate } ?: return
-            // Two hints the platform understands: the display mode and the frame rate the app wants.
+            val best = display.supportedModes.maxByOrNull { it.refreshRate } ?: return@runCatching
+            peakRate = best.refreshRate
+            // 锁定最高刷新率：优先显示模式 + 期望帧率；Android 11+ 再用固定帧率通告，避免系统降频分配
             window.attributes = window.attributes.apply {
                 preferredDisplayModeId = best.modeId
                 preferredRefreshRate = best.refreshRate
             }
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                runCatching { window.setFrameRate(best.refreshRate, android.view.Window.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE) }
+            }
         }
         lifecycleScope.launch {
             runCatching {
-                val peak = shell.exec("settings get system peak_refresh_rate", 6_000).output.trim()
-                if (peak != "144.0" && peak != "144") shell.exec("settings put system peak_refresh_rate 144.0", 8_000)
-                // OEM-level cap (vivo). Only touched when this device actually has the key.
+                val peak = if (peakRate > 0f) peakRate else 120f
+                val peakText = if (peak >= peak.toInt()) peak.toInt().toString() else peak.toString()
+                val cur = shell.exec("settings get system peak_refresh_rate", 6_000).output.trim()
+                if (cur != peakText) shell.exec("settings put system peak_refresh_rate " + peakText, 8_000)
+                val dv = shell.exec("settings get system min_refresh_rate", 6_000).output.trim()
+                if (cur != "null" && dv != peakText) shell.exec("settings put system min_refresh_rate " + peakText, 8_000)
+                // OEM-level cap (vivo)：只在这台设备真有这个键时改
                 val mode = shell.exec("settings get global vivo_screen_refresh_rate_mode", 6_000).output.trim()
-                if (mode != "null" && mode != "144") shell.exec("settings put global vivo_screen_refresh_rate_mode 144", 8_000)
+                if (mode != "null" && mode != peakText) shell.exec("settings put global vivo_screen_refresh_rate_mode " + peakText, 8_000)
             }
         }
-    }
-
-
-    override fun onResume() {
-        super.onResume()
-        requestMaxRefreshRate()
     }
 
     private fun handleAppLink(intent: Intent?) {
