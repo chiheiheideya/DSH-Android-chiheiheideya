@@ -108,7 +108,11 @@ jobs:
       - name: Delete previous release with this tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release delete v${{ env.VERSION }} --repo ${{ github.repository }} --yes --cleanup-tag || true
+        run: |
+          # 只保留最新一个版本：发布前删掉所有旧 release 和 tag
+          gh release list --repo ${{ github.repository }} --limit 100 --json tagName --jq ".[].tagName" | while read -r t; do
+            [ -n "$t" ] && gh release delete "$t" --repo ${{ github.repository }} --yes --cleanup-tag || true
+          done
 
       - name: Publish release (public APK download)
         uses: softprops/action-gh-release@v2
