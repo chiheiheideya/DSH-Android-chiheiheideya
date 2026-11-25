@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
                         boot?.let { AppNav(it.second, platformPage) }
                         AccountToastHost(account)
                         // The update prompt (AppUpdater), over whatever page is showing.
-                        io.github.jackwener.dsh.feature.update.UpdateHost(updater)
+                        io.github.jackwener.dsh.feature.update.UpdateHost(updater, onUpdate = { updater.startDownload() })
                     }
                 }
             }
