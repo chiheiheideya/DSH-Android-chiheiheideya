@@ -124,7 +124,7 @@ fun ToolRow(t: Block.Tool, sessionId: String, onInspect: (String) -> Unit) {
     val context = LocalContext.current
     val c = Dsh.colors
     val info = remember(t.name) { ToolPresentation.info(t.name) }
-    var open by rememberSaveable(t.key) { mutableStateOf(false) }
+    var open by rememberSaveable(t.key) { mutableStateOf(true) } // 默认展开：直接看到命令与输出
     var fullText by remember { mutableStateOf<String?>(null) }
     val live = t.state == ToolState.Running
     val summary = when (t.state) {
