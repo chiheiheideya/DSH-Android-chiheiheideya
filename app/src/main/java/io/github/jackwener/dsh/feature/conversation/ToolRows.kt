@@ -96,16 +96,20 @@ fun prettyJson(raw: String?): String = raw?.let {
 
 /** Thinking row (dsh ReasoningRow): collapsed to 思考 · first-line preview; expanded body is compact markdown indented 22. */
 @Composable
-fun ReasoningRow(b: Block.Reasoning, live: Boolean) {
+fun ReasoningRow(b: Block.Reasoning, live: Boolean, detail: Boolean = false) {
     // 用户手动展开过就保持展开（思考完成/下一步刷新时不自动折叠）
-    var open by rememberSaveable(b.key + ":open") { mutableStateOf(false) }
+    // 设置里开了"详细"：默认展开显示全文；否则折叠只显示第一行预览
+    var open by rememberSaveable(b.key + ":open") { mutableStateOf(detail) }
     var fullText by remember { mutableStateOf<String?>(null) }
     val preview = remember(b.text) { b.text.lineSequence().map { it.trim().trimStart('#', '*', '-', ' ') }.firstOrNull { it.isNotBlank() } ?: "" }
     Column {
         DisclosureRow(R.drawable.dsw_think_outline, stringResource(R.string.think), preview, open, { open = !open }, live = live,
             onSummaryClick = { if (b.text.isNotBlank()) fullText = b.text })
         ExpandBody(open) {
-            Box(Modifier.padding(start = 22.dp, top = 4.dp, bottom = 4.dp)) { DshMarkdown(b.text, compact = true) }
+            Box(Modifier.padding(start = 22.dp, top = 4.dp, bottom = 4.dp)) {
+                // 详细模式：完整展示（不压缩字号）；普通模式保持紧凑
+                DshMarkdown(b.text, compact = !detail)
+            }
         }
     }
     fullText?.let { text ->
@@ -234,11 +238,11 @@ fun TodoList(items: List<Pair<String, String>>) {
  * title ("已读取屏幕并已点击 3 次"); the group stays open while live.
  */
 @Composable
-fun StepGroup(key: String, blocks: List<Block>, live: Boolean, sessionId: String, onInspect: (String) -> Unit) {
+fun StepGroup(key: String, blocks: List<Block>, live: Boolean, sessionId: String, onInspect: (String) -> Unit, detail: Boolean = false) {
     val tools = blocks.filterIsInstance<Block.Tool>()
     val context = LocalContext.current
     if (tools.size < 2) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { blocks.forEach { StepBlock(it, live, sessionId, onInspect) } }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { blocks.forEach { StepBlock(it, live, sessionId, onInspect, detail) } }
         return
     }
     val c = Dsh.colors
@@ -267,9 +271,9 @@ fun StepGroup(key: String, blocks: List<Block>, live: Boolean, sessionId: String
 }
 
 @Composable
-private fun StepBlock(b: Block, live: Boolean, sessionId: String, onInspect: (String) -> Unit) {
+private fun StepBlock(b: Block, live: Boolean, sessionId: String, onInspect: (String) -> Unit, detail: Boolean = false) {
     when (b) {
-        is Block.Reasoning -> ReasoningRow(b, live)
+        is Block.Reasoning -> ReasoningRow(b, live, detail)
         is Block.Tool -> ToolRow(b, sessionId, onInspect)
         else -> {}
     }

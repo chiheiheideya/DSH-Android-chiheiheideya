@@ -193,7 +193,7 @@ private fun ProcessBlocks(turnKey: String, blocks: List<Block>, live: Boolean, s
                 is Block.Text -> Box(Modifier.padding(vertical = 8.dp)) { DshMarkdown(b.text) }
                 is Block.Compaction -> CompactionRow(b)
                 is Block.Notice -> NoticeRow(b)
-                else -> StepGroup("$turnKey/$i", seg, segLive, sessionId, onInspect)
+                else -> StepGroup("$turnKey/$i", seg, segLive, sessionId, onInspect, detail = details != WorkDetails.Compact)
             }
         }
     }
