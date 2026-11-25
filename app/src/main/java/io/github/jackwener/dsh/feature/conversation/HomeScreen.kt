@@ -297,7 +297,7 @@ private fun EmptyHero(vm: HomeViewModel, composer: ComposerState, settings: Sett
     Column(Modifier.fillMaxSize().imePadding().navigationBarsPadding().padding(horizontal = 8.dp).padding(bottom = 32.dp),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Whale(width = 34.dp)
+            Whale(width = 34.dp, tint = io.github.jackwener.dsh.core.designsystem.BRAND_WHALE_BLUE)
             Spacer(Modifier.width(10.dp))
             Text(stringResource(R.string.hero_title), style = DshType.xl24.copy(fontSize = DshType.xl24.fontSize * 1.08f, fontWeight = androidx.compose.ui.text.font.FontWeight(500)),
                 color = c.labelPrimary, textAlign = TextAlign.Center)

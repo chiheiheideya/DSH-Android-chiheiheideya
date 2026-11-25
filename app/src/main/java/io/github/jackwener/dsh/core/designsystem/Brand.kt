@@ -28,6 +28,9 @@ import io.github.jackwener.dsh.R
 
 /** The DeepSeek whale (dsh FishLogo), drawn in the current text color. */
 @Composable
+/** 品牌鲸鱼蓝（#2F6BFF 淡一点） */
+val BRAND_WHALE_BLUE = Color(0xFF2F6BFF)
+
 fun Whale(modifier: Modifier = Modifier, width: Dp = 34.dp, tint: Color = Dsh.colors.labelPrimary) =
     Icon(painterResource(R.drawable.dsw_whale), null, modifier.size(width, width * 17.04f / 23.16f), tint = tint)
 
@@ -47,7 +50,7 @@ fun SwimmingWhale(width: Dp = 14.dp, tint: Color = Dsh.colors.deepDiving) {
 @Composable
 fun Wordmark(modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Whale(width = 24.dp)
+        Whale(width = 24.dp, tint = BRAND_WHALE_BLUE)
         Spacer(Modifier.width(8.dp))
         Text("deepseek", style = DshType.l20.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight(600), letterSpacing = (-0.2).sp), color = Dsh.colors.labelPrimary)
         Spacer(Modifier.width(5.dp))
