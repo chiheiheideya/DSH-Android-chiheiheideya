@@ -173,8 +173,8 @@
     <string name="notif_not_finished_generic">任务未完成，可以继续</string>
     <string name="notif_attention">%1$s：%2$s</string>
     <string name="notif_sessions_summary">%1$d 个会话有新消息</string>
-    <string name="deep_diving">深度求索中，用时 %1$s ···</string>
-    <string name="deep_diving_activity">%1$s，用时 %2$s ···</string>
+    <string name="deep_diving">深度求索中，用时 %1$s</string>
+    <string name="deep_diving_activity">%1$s，用时 %2$s</string>
     <string name="starting_engine">正在启动智能体引擎…</string>
     <string name="waiting_unlock">等待你解锁手机后继续…</string>
     <string name="waiting_network">等待网络恢复后继续…</string>

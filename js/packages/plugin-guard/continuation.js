@@ -67,7 +67,9 @@ export function assessStop(events, { limit = CONTINUE_LIMIT, earlier = null } = 
   const content = lastAssistant?.data?.message?.content
   const endedByTool = Array.isArray(content) && content.some(b => b?.type === 'tool-call')
   const text = textOf(content)
-  const claims = CLAIMS_CONTINUATION.test(text)
+  // 正常收尾（明确说完成/总结完毕）优先：不要因为回答里出现“继续/下一步”这类词就自动继续
+  const WRAPPED_UP = /(已|都)(全部)?(完成|做完|搞定|处理完)|任务(已|全部)完成|已完成所有|总结(一下|如下)?[:：]|以上就是|这就是(全部|最终)|all (done|finished|complete)|everything is (done|complete)/i
+  const claims = CLAIMS_CONTINUATION.test(text) && !WRAPPED_UP.test(text)
   const stop = reason => ({ continue: false, reason, todos: counts, nudges })
   // A tool concluded the turn (or no answer at all): nothing to judge.
   if (lastAssistant === undefined || endedByTool) return stop('done')
