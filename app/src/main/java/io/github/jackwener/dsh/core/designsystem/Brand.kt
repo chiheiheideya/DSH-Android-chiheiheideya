@@ -28,11 +28,11 @@ import io.github.jackwener.dsh.R
 
 /** The DeepSeek whale (dsh FishLogo), drawn in the current text color. */
 @Composable
-/** 品牌鲸鱼蓝（#2F6BFF 淡一点） */
-val BRAND_WHALE_BLUE = Color(0xFF2F6BFF)
-
 fun Whale(modifier: Modifier = Modifier, width: Dp = 34.dp, tint: Color = Dsh.colors.labelPrimary) =
     Icon(painterResource(R.drawable.dsw_whale), null, modifier.size(width, width * 17.04f / 23.16f), tint = tint)
+
+/** 品牌鲸鱼蓝（#2F6BFF） */
+val BRAND_WHALE_BLUE = Color(0xFF2F6BFF)
 
 /**
  * Running indicator whale: dsh animates a 28 px whale sprite; here the vector whale "swims"

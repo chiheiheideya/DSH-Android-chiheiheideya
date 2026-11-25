@@ -156,7 +156,7 @@ private fun TurnView(
             if (!running) TurnHeader(turn, open) { open = !open }
             if (running || open) {
                 Spacer(Modifier.height(if (running) 0.dp else 12.dp))
-                ProcessBlocks(turn.key, process, running, live.sessionId, onInspect)
+                ProcessBlocks(turn.key, process, running, live.sessionId, onInspect, details)
             }
         }
         turn.reply?.let { reply ->
@@ -175,7 +175,7 @@ private fun TurnView(
 
 /** Process rows: thinking/tool runs become step groups; interim assistant text renders as markdown. */
 @Composable
-private fun ProcessBlocks(turnKey: String, blocks: List<Block>, live: Boolean, sessionId: String, onInspect: (String) -> Unit) {
+private fun ProcessBlocks(turnKey: String, blocks: List<Block>, live: Boolean, sessionId: String, onInspect: (String) -> Unit, details: WorkDetails = WorkDetails.Standard) {
     val segments = remember(blocks) {
         val out = mutableListOf<List<Block>>()
         var run = mutableListOf<Block>()
