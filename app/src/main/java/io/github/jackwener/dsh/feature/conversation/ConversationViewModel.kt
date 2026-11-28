@@ -205,7 +205,11 @@ class HomeViewModel @Inject constructor(
     /** 我来接管: the agent screen's app moves to the user's screen; the agent stops acting there until the user writes. */
     fun takeOverAgentScreen(onDone: (Boolean) -> Unit) = viewModelScope.launch { onDone(agentScreen.handToUser(id, byUser = true) != null) }
 
-    val sessions: StateFlow<List<SessionEntity>> = store.conversations.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val sessions: StateFlow<List<SessionEntity>> = store.conversations
+        .let { list -> store.recycled.let { rec -> kotlinx.coroutines.flow.combine(list, rec) { rows: List<SessionEntity>, recycled: Set<String> ->
+            rows.filter { it.id !in recycled }
+        } } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val rowStatus: StateFlow<Map<String, RowStatus>> = store.status
 
     /** Sidebar search: conversations whose messages contain the query. */

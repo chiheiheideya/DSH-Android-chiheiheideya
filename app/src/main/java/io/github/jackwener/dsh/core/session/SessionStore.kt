@@ -151,13 +151,10 @@ class SessionStore @Inject constructor(
 
     /** The session list (drawer, quick panel): [SessionVisibility.listed], the rule notifications share. */
     /** 回收站里的会话 id（删除先放这里，可恢复；不删数据）。 */
-    private val recycled = MutableStateFlow(RecycleBin.entries(context).keys)
+    val recycled: MutableStateFlow<Set<String>> = MutableStateFlow(RecycleBin.entries(context).keys)
 
 
-    val conversations: Flow<List<SessionEntity>> = dao.observeTopLevel().map { rows ->
-        val rec: Set<String> = recycled.value
-        rows.filter { SessionVisibility.listed(it) && it.id !in rec }
-    }
+    val conversations: Flow<List<SessionEntity>> = dao.observeTopLevel().map { rows -> rows.filter(SessionVisibility::listed) }
 
     init {
         // Rows still marked running belong to a previous app process (both processes died): the
@@ -1165,6 +1162,12 @@ class SessionStore @Inject constructor(
         RecycleBin.remove(context, sessionId)
         recycled.value = recycled.value - sessionId
         delete(sessionId)
+        // 引擎日志也删掉：否则引擎/导入仍能把已彻底删除的会话恢复出来
+        runCatching {
+            File(context.filesDir, "dsh-home/sessions").listFiles()?.forEach { project ->
+                project.listFiles()?.firstOrNull { it.name == sessionId }?.deleteRecursively()
+            }
+        }
     }
 
     /** 回收站列表（会话 + 删除时间，新的在前）。 */

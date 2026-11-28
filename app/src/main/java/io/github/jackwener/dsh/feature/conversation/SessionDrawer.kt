@@ -225,8 +225,8 @@ private fun SessionRow(
             DButton(stringResource(R.string.save), { renaming = false; onRename(s.id, title.trim()) }, enabled = title.isNotBlank())
         }) { DInput(title, { title = it }) }
     }
-    if (deleting) DDialog({ deleting = false }, stringResource(R.string.delete_session_title), buttons = {
+    if (deleting) DDialog({ deleting = false }, "移入回收站？", buttons = {
         DButton(stringResource(R.string.cancel), { deleting = false }, variant = BtnVariant.Outline)
-        DButton(stringResource(R.string.delete), { deleting = false; onDelete(s.id) }, variant = BtnVariant.Danger)
+        DButton("移入回收站", { deleting = false; onDelete(s.id) }, variant = BtnVariant.Danger)
     }) { Text(stringResource(R.string.delete_session_body), style = DshType.s14, color = c.labelSecondary) }
 }
