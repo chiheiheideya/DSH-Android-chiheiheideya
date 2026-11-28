@@ -62,7 +62,7 @@ fun RecycleBinScreen(onBack: () -> Unit, vm: HomeViewModel) {
         // 顶栏：左上角返回放大到 44dp，右侧多选/完成
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            IconBtn(R.drawable.dsw_arrow_left, onBack, size = 44.dp, iconSize = 22.dp, tint = c.labelPrimary, contentDescription = "返回")
+            IconBtn(R.drawable.dsw_chevron_left_outline, onBack, size = 44.dp, iconSize = 22.dp, tint = c.labelPrimary, contentDescription = "返回")
             Spacer(Modifier.width(4.dp))
             Text("回收站", Modifier.weight(1f), style = DshType.l20, color = c.labelPrimary)
             if (items.isNotEmpty()) {
