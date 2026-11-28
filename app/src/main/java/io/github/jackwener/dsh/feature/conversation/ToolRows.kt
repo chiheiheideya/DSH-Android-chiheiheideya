@@ -115,7 +115,7 @@ fun ReasoningRow(b: Block.Reasoning, live: Boolean, detail: Boolean = false) {
     fullText?.let { text ->
         DDialog({ fullText = null }, stringResource(R.string.full_text), buttons = {
             DButton(stringResource(R.string.close_action), { fullText = null }, variant = BtnVariant.Outline)
-        }) { SelectionContainer { Text(text, style = DshType.xs13, color = Dsh.colors.labelSecondary) } }
+        }) { SelectionContainer { Text(text, Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), style = DshType.xs13, color = Dsh.colors.labelSecondary) } }
     }
 }
 
